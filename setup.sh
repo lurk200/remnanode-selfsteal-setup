@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-# Remnawave SelfSteal Multi-Protocol Setup v1.1.0
-# Авто: домен, certs, UFW, Reality keys, JSON, Hosts-шаблон, тесты
+# Remnawave SelfSteal Multi-Protocol Setup v1.2.0
+# Авто: домен, certs, UFW, Reality keys, RU-SNI probe, JSON, Hosts, тесты
 #
 # bash <(curl -fsSL https://cdn.jsdelivr.net/gh/lurk200/remnanode-selfsteal-setup@main/setup.sh) --yes --all
 #
@@ -519,7 +519,7 @@ if "grpc" in selected:
         "spiderX": "",
         "shortIds": [short],
         "privateKey": priv,
-        "serverNames": [domain],
+        "serverNames": [ru_host],
       },
     },
   })
@@ -550,7 +550,7 @@ if "xhttp" in selected:
         "spiderX": "",
         "shortIds": [short],
         "privateKey": priv,
-        "serverNames": [domain],
+        "serverNames": [ru_host],
       },
     },
   })
@@ -582,15 +582,15 @@ with open(hints, "w", encoding="utf-8") as f:
 
 with open(hosts, "w", encoding="utf-8") as f:
   f.write(f"""# HOSTS / подписка Remnawave
-# VLESS Reality SelfSteal: flow ПУСТОЙ (не xtls-rprx-vision)
-# Client SNI = ваш домен ({domain}), не RU-сайт
-# RU dest ({ru_dest}) — только fingerprint Reality на gRPC/XHTTP (сервер→сайт)
+# VLESS SelfSteal: SNI = ваш домен, flow ПУСТОЙ
+# gRPC/XHTTP Reality: Address = нода/домен, SNI = RU-сайт ({ru_host})
+#   (совпадает с dest/serverNames; сервер dial'ит {ru_dest})
 
-DOMAIN / SNI / Address = {domain}
+Address (клиент→нода)  = {domain}
 publicKey (pbk)        = {pub}
 shortId (sid)          = {short}
 fingerprint            = chrome
-reality_dest (grpc/xhttp) = {ru_dest}
+reality_dest           = {ru_dest}
 
 ## {tag_vless}
 inbound   = {tag_vless}
@@ -613,7 +613,7 @@ port        = 8443
 type        = grpc
 serviceName = {svc}
 mode        = gun
-sni         = {domain}
+sni         = {ru_host}
 pbk         = {pub}
 sid         = {short}
 
@@ -623,7 +623,7 @@ port    = 4443
 type    = xhttp
 path    = /
 mode    = auto
-sni     = {domain}
+sni     = {ru_host}
 pbk     = {pub}
 sid     = {short}
 """)
@@ -632,8 +632,8 @@ uuid = "00000000-0000-0000-0000-000000000000"
 with open(uris, "w", encoding="utf-8") as f:
   f.write("# Пример URI (подставь UUID пользователя). flow НЕ использовать.\n")
   f.write(f"vless://{uuid}@{domain}:443?encryption=none&type=tcp&security=reality&sni={domain}&fp=chrome&pbk={pub}&sid={short}#{prefix}-vless\n")
-  f.write(f"vless://{uuid}@{domain}:8443?encryption=none&type=grpc&serviceName={svc}&mode=gun&security=reality&sni={domain}&fp=chrome&pbk={pub}&sid={short}#{prefix}-grpc\n")
-  f.write(f"vless://{uuid}@{domain}:4443?encryption=none&type=xhttp&path=%2F&mode=auto&security=reality&sni={domain}&fp=chrome&pbk={pub}&sid={short}#{prefix}-xhttp\n")
+  f.write(f"vless://{uuid}@{domain}:8443?encryption=none&type=grpc&serviceName={svc}&mode=gun&security=reality&sni={ru_host}&fp=chrome&pbk={pub}&sid={short}#{prefix}-grpc\n")
+  f.write(f"vless://{uuid}@{domain}:4443?encryption=none&type=xhttp&path=%2F&mode=auto&security=reality&sni={ru_host}&fp=chrome&pbk={pub}&sid={short}#{prefix}-xhttp\n")
   f.write(f"hysteria2://{uuid}@{domain}:443/?sni={domain}#{prefix}-hy2\n")
 
 print("ok")

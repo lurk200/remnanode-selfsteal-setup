@@ -1,13 +1,13 @@
 #!/bin/bash
 #
-# Remnawave SelfSteal Multi-Protocol Setup v1.2.0
+# Remnawave SelfSteal Multi-Protocol Setup v1.2.1
 # Авто: домен, certs, UFW, Reality keys, RU-SNI probe, JSON, Hosts, тесты
 #
 # bash <(curl -fsSL https://cdn.jsdelivr.net/gh/lurk200/remnanode-selfsteal-setup@main/setup.sh) --yes --all
 #
 set -euo pipefail
 
-VERSION="1.2.0-selfsteal"
+VERSION="1.2.1-selfsteal"
 OUT_DIR="/opt/remnanode"
 JSON_OUT="${OUT_DIR}/config-profile-selfsteal.json"
 HINTS_OUT="${OUT_DIR}/reality-client-hints.txt"
@@ -170,13 +170,24 @@ probe_ru_snis() {
   fi
 
   log_info "Перебор российских SNI/dest (лимит ${RU_SNI_LIMIT})..."
+  need_cmd python3
+  mkdir -p "$OUT_DIR"
+
   local list=("${RU_SNI_CANDIDATES[@]:0:${RU_SNI_LIMIT}}")
-  local best
-  best=$(printf '%s\n' "${list[@]}" | RU_SNI_OUT="$RU_SNI_OUT" python3 - <<'PY'
+  local list_file best
+  list_file=$(mktemp)
+  printf '%s\n' "${list[@]}" > "$list_file"
+
+  # hosts через файл: нельзя pipe+heredoc (stdin занят скриптом → SIGPIPE + set -e)
+  set +e
+  best=$(
+    RU_SNI_OUT="$RU_SNI_OUT" RU_SNI_LIST="$list_file" python3 <<'PY'
 import os, sys, time, socket, ssl
 
 out_path = os.environ.get("RU_SNI_OUT", "/opt/remnanode/RU-SNI-REPORT.txt")
-hosts = [h.strip() for h in sys.stdin if h.strip()]
+list_path = os.environ["RU_SNI_LIST"]
+with open(list_path, encoding="utf-8") as fh:
+    hosts = [h.strip() for h in fh if h.strip()]
 rows = []
 
 def probe(host, port=443, timeout=3.0):
@@ -198,10 +209,11 @@ for h in hosts:
     ok, ms, cipher, err = probe(h)
     rows.append((ok, ms, h, cipher, err))
     status = "OK" if ok else "FAIL"
-    print(f"  [{status}] {h:28s} {ms:4d}ms  {err}", file=sys.stderr)
+    print(f"  [{status}] {h:28s} {ms:4d}ms  {err}", file=sys.stderr, flush=True)
 
 ok_rows = [r for r in rows if r[0]]
 ok_rows.sort(key=lambda r: r[1])
+os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
 with open(out_path, "w", encoding="utf-8") as f:
     f.write("# RU SNI/dest probe from this node\n")
     f.write("# Reality dest dials FROM the server — must be reachable here\n")
@@ -221,7 +233,15 @@ with open(out_path, "w", encoding="utf-8") as f:
     else:
         f.write("\nBEST=\n")
 PY
-)
+  )
+  local probe_rc=$?
+  set -e
+  rm -f "$list_file"
+
+  if [[ $probe_rc -ne 0 ]]; then
+    log_warn "RU SNI probe завершился с ошибкой (rc=${probe_rc}) — fallback ${BEST_RU_DEST}"
+    return
+  fi
 
   if [[ -n "${best:-}" ]]; then
     BEST_RU_HOST="$best"

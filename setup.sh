@@ -15,7 +15,7 @@
 #
 set -euo pipefail
 
-VERSION="1.0.2-selfsteal"
+VERSION="1.0.3-selfsteal"
 OUT_DIR="/opt/remnanode"
 JSON_OUT="${OUT_DIR}/config-profile-selfsteal.json"
 CERT_PERSIST="${OUT_DIR}/certs"
@@ -76,7 +76,7 @@ show_logo() {
   cat <<'EOF'
 ╔══════════════════════════════════════════════════════════════════╗
 ║          Remnawave SelfSteal Multi-Protocol Setup                ║
-║                     fixed · auto JSON · v1.0.2                   ║
+║                     fixed · auto JSON · v1.0.3                   ║
 ╚══════════════════════════════════════════════════════════════════╝
 EOF
 }
@@ -279,10 +279,10 @@ gen_reality_keys() {
   fi
 
   if [[ "$REUSE_KEYS" == "true" && -f "${OUT_DIR}/reality-client-hints.txt" ]]; then
-    PRIVATE_KEY=$(grep '^privateKey=' "${OUT_DIR}/reality-client-hints.txt" | cut -d= -f2-)
-    PUBLIC_KEY=$(grep '^publicKey=' "${OUT_DIR}/reality-client-hints.txt" | cut -d= -f2-)
-    SHORT_ID=$(grep '^shortId=' "${OUT_DIR}/reality-client-hints.txt" | cut -d= -f2-)
-    if [[ -n "$PRIVATE_KEY" && -n "$SHORT_ID" ]]; then
+    PRIVATE_KEY=$(grep '^privateKey=' "${OUT_DIR}/reality-client-hints.txt" | cut -d= -f2- || true)
+    PUBLIC_KEY=$(grep '^publicKey=' "${OUT_DIR}/reality-client-hints.txt" | cut -d= -f2- || true)
+    SHORT_ID=$(grep '^shortId=' "${OUT_DIR}/reality-client-hints.txt" | cut -d= -f2- || true)
+    if [[ -n "${PRIVATE_KEY:-}" && -n "${SHORT_ID:-}" ]]; then
       log_ok "Reuse keys из reality-client-hints.txt (shortId=${SHORT_ID})"
       return
     fi
@@ -291,17 +291,36 @@ gen_reality_keys() {
 
   log_info "Генерация НОВЫХ Reality ключей (клиентов нужно обновить)..."
   local out=""
-  if out=$(docker exec remnanode /usr/local/bin/xray x25519 2>/dev/null); then
-    :
-  elif out=$(docker exec remnanode xray x25519 2>/dev/null); then
-    :
-  else
-    fatal "Не удалось выполнить xray x25519 в remnanode"
+  set +e
+  out=$(docker exec remnanode /usr/local/bin/xray x25519 2>&1)
+  local rc=$?
+  if [[ $rc -ne 0 || -z "$out" ]]; then
+    out=$(docker exec remnanode xray x25519 2>&1)
+    rc=$?
+  fi
+  if [[ $rc -ne 0 || -z "$out" ]]; then
+    out=$(docker exec remnanode sh -c 'command -v xray; ls /usr/local/bin/xray /usr/bin/xray 2>/dev/null; /usr/local/bin/xray x25519' 2>&1)
+    rc=$?
+  fi
+  set -e
+
+  PRIVATE_KEY=$(printf '%s\n' "$out" | awk -F': *' 'BEGIN{IGNORECASE=1} /^Private(Key| key)?[[:space:]]*:/ {print $2; exit}' | tr -d '\r[:space:]')
+  PUBLIC_KEY=$(printf '%s\n' "$out" | awk -F': *' 'BEGIN{IGNORECASE=1} /^Public(Key| key)?[[:space:]]*:/ {print $2; exit}' | tr -d '\r[:space:]')
+
+  # fallback: sometimes only two base64-like lines
+  if [[ -z "${PRIVATE_KEY:-}" || -z "${PUBLIC_KEY:-}" ]]; then
+    mapfile -t _lines < <(printf '%s\n' "$out" | grep -E '^[A-Za-z0-9_-]{40,}$' || true)
+    if [[ ${#_lines[@]} -ge 2 ]]; then
+      PRIVATE_KEY="${_lines[0]}"
+      PUBLIC_KEY="${_lines[1]}"
+    fi
   fi
 
-  PRIVATE_KEY=$(echo "$out" | grep -iE 'Private( key)?:' | head -1 | awk '{print $NF}' | tr -d '\r')
-  PUBLIC_KEY=$(echo "$out" | grep -iE 'Public( key)?:' | head -1 | awk '{print $NF}' | tr -d '\r')
-  [[ -n "$PRIVATE_KEY" && -n "$PUBLIC_KEY" ]] || fatal "Не распарсил x25519 вывод: $out"
+  if [[ -z "${PRIVATE_KEY:-}" || -z "${PUBLIC_KEY:-}" ]]; then
+    log_error "Не удалось получить Reality keys. Вывод x25519:"
+    echo "$out"
+    fatal "xray x25519 parse failed"
+  fi
 
   SHORT_ID=$(openssl rand -hex 4)
   log_ok "Reality keys готовы (shortId=${SHORT_ID})"

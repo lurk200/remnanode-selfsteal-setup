@@ -7,7 +7,7 @@
 #
 set -euo pipefail
 
-VERSION="1.1.0-selfsteal"
+VERSION="1.2.0-selfsteal"
 OUT_DIR="/opt/remnanode"
 JSON_OUT="${OUT_DIR}/config-profile-selfsteal.json"
 HINTS_OUT="${OUT_DIR}/reality-client-hints.txt"
@@ -15,6 +15,7 @@ HOSTS_OUT="${OUT_DIR}/HOSTS-FOR-PANEL.txt"
 URIS_OUT="${OUT_DIR}/example-client-uris.txt"
 CERT_PERSIST="${OUT_DIR}/certs"
 REPORT_OUT="${OUT_DIR}/setup-report.txt"
+RU_SNI_OUT="${OUT_DIR}/RU-SNI-REPORT.txt"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 BLUE='\033[0;34m'; NC='\033[0m'
@@ -34,20 +35,69 @@ PRIVATE_KEY_OPT=""
 PUBLIC_KEY_OPT=""
 SHORT_ID_OPT=""
 TEST_ONLY=false
+SKIP_RU_SNI=false
+RU_SNI_LIMIT=25
+BEST_RU_DEST="www.cloudflare.com:443"
+BEST_RU_HOST="www.cloudflare.com"
 PASS=0
 FAIL=0
+
+# Популярные российские (и дружественные к РФ) dest/SNI для Reality
+RU_SNI_CANDIDATES=(
+  www.gazprom.ru
+  www.sberbank.ru
+  www.vtb.ru
+  www.tbank.ru
+  www.tinkoff.ru
+  www.rzd.ru
+  www.gosuslugi.ru
+  www.mos.ru
+  www.nalog.gov.ru
+  www.cbr.ru
+  www.vk.com
+  m.vk.com
+  www.ok.ru
+  www.mail.ru
+  www.yandex.ru
+  ya.ru
+  music.yandex.ru
+  disk.yandex.ru
+  www.wildberries.ru
+  www.ozon.ru
+  www.avito.ru
+  www.dns-shop.ru
+  www.mvideo.ru
+  www.citilink.ru
+  www.eldorado.ru
+  www.mts.ru
+  www.megafon.ru
+  www.beeline.ru
+  www.rt.ru
+  www.ivi.ru
+  www.kinopoisk.ru
+  hh.ru
+  www.cian.ru
+  www.auto.ru
+  www.drom.ru
+  www.pikabu.ru
+  www.rutube.ru
+  www.2gis.ru
+  www.gu.spb.ru
+)
 
 usage() {
   cat <<'USAGE'
 Usage: setup.sh [options]
 
-  --yes, -y       без вопросов, все протоколы
-  --all           hy2 + grpc + xhttp
-  --domain NAME   selfsteal домен
-  --prefix TAG    префикс тегов (ger/pl/yt/www)
-  --new-keys      принудительно новые Reality keys (сломает старых клиентов)
+  --yes, -y          без вопросов, все протоколы
+  --all              hy2 + grpc + xhttp
+  --domain NAME      selfsteal домен
+  --prefix TAG       префикс тегов (ger/pl/yt/www)
+  --new-keys         новые Reality keys
   --private-key / --public-key / --short-id
-  --test-only     только диагностика текущего состояния
+  --test-only        только диагностика
+  --skip-ru-sni      не перебирать российские SNI/dest
+  --ru-sni-limit N   сколько кандидатов проверить (default 25)
   -h, --help
 USAGE
 }
@@ -63,6 +113,8 @@ while [[ $# -gt 0 ]]; do
     --public-key) PUBLIC_KEY_OPT="$2"; shift 2 ;;
     --short-id) SHORT_ID_OPT="$2"; shift 2 ;;
     --test-only) TEST_ONLY=true; shift ;;
+    --skip-ru-sni) SKIP_RU_SNI=true; shift ;;
+    --ru-sni-limit) RU_SNI_LIMIT="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) fatal "Неизвестный аргумент: $1" ;;
   esac
@@ -71,8 +123,8 @@ done
 show_logo() {
   cat <<EOF
 ╔══════════════════════════════════════════════════════════════════╗
-║       Remnawave SelfSteal Multi-Protocol Setup  v${VERSION}      ║
-║     auto domain · certs · keys · JSON · Hosts · self-tests       ║
+║       Remnawave SelfSteal Multi-Protocol Setup  v${VERSION}    ║
+║  auto · certs · keys · RU-SNI probe · JSON · Hosts · self-tests  ║
 ╚══════════════════════════════════════════════════════════════════╝
 EOF
 }
@@ -105,6 +157,79 @@ derive_public() {
   out=$(docker exec remnanode "$xb" x25519 -i "$priv" 2>&1 || true)
   pub=$(printf '%s\n' "$out" | awk -F': *' 'BEGIN{IGNORECASE=1} /PublicKey/ {gsub(/\r/,"",$2); gsub(/^ +| +$/,"",$2); print $2; exit}')
   echo "$pub"
+}
+
+# Перебор российских dest/SNI: TCP+TLS с ноды (Reality dest ходит с сервера)
+probe_ru_snis() {
+  BEST_RU_DEST="www.cloudflare.com:443"
+  BEST_RU_HOST="www.cloudflare.com"
+
+  if [[ "$SKIP_RU_SNI" == "true" ]]; then
+    log_warn "Пропуск перебора RU SNI (--skip-ru-sni), dest=${BEST_RU_DEST}"
+    return
+  fi
+
+  log_info "Перебор российских SNI/dest (лимит ${RU_SNI_LIMIT})..."
+  local list=("${RU_SNI_CANDIDATES[@]:0:${RU_SNI_LIMIT}}")
+  local best
+  best=$(printf '%s\n' "${list[@]}" | RU_SNI_OUT="$RU_SNI_OUT" python3 - <<'PY'
+import os, sys, time, socket, ssl
+
+out_path = os.environ.get("RU_SNI_OUT", "/opt/remnanode/RU-SNI-REPORT.txt")
+hosts = [h.strip() for h in sys.stdin if h.strip()]
+rows = []
+
+def probe(host, port=443, timeout=3.0):
+    t0 = time.time()
+    try:
+        raw = socket.create_connection((host, port), timeout=timeout)
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        with ctx.wrap_socket(raw, server_hostname=host) as ssock:
+            ms = int((time.time() - t0) * 1000)
+            cipher = ssock.cipher()[0] if ssock.cipher() else ""
+            return True, ms, cipher, ""
+    except Exception as e:
+        ms = int((time.time() - t0) * 1000)
+        return False, ms, "", str(e)[:120]
+
+for h in hosts:
+    ok, ms, cipher, err = probe(h)
+    rows.append((ok, ms, h, cipher, err))
+    status = "OK" if ok else "FAIL"
+    print(f"  [{status}] {h:28s} {ms:4d}ms  {err}", file=sys.stderr)
+
+ok_rows = [r for r in rows if r[0]]
+ok_rows.sort(key=lambda r: r[1])
+with open(out_path, "w", encoding="utf-8") as f:
+    f.write("# RU SNI/dest probe from this node\n")
+    f.write("# Reality dest dials FROM the server — must be reachable here\n")
+    f.write("# Client SNI for SelfSteal VLESS stays your steal domain\n")
+    f.write("# dest below is used for gRPC/XHTTP Reality fingerprint\n\n")
+    f.write("rank\tms\thost\tcipher\n")
+    for i, (ok, ms, h, cipher, err) in enumerate(ok_rows, 1):
+        f.write(f"{i}\t{ms}\t{h}\t{cipher}\n")
+    f.write("\n# FAILED\n")
+    for ok, ms, h, cipher, err in rows:
+        if not ok:
+            f.write(f"FAIL\t{ms}\t{h}\t{err}\n")
+    if ok_rows:
+        f.write(f"\nBEST={ok_rows[0][2]}:443\n")
+        f.write("TOP3=" + ",".join(r[2] for r in ok_rows[:3]) + "\n")
+        sys.stdout.write(ok_rows[0][2])
+    else:
+        f.write("\nBEST=\n")
+PY
+)
+
+  if [[ -n "${best:-}" ]]; then
+    BEST_RU_HOST="$best"
+    BEST_RU_DEST="${best}:443"
+    log_ok "Лучший RU dest: ${BEST_RU_DEST} (отчёт: ${RU_SNI_OUT})"
+  else
+    log_warn "Ни один RU SNI не ответил — fallback ${BEST_RU_DEST}"
+  fi
 }
 
 detect_domain() {
@@ -309,6 +434,7 @@ build_outputs() {
   export DOMAIN PREFIX PRIVATE_KEY PUBLIC_KEY SHORT_ID
   export SELECTED="${SELECTED[*]}"
   export JSON_OUT HINTS_OUT HOSTS_OUT URIS_OUT
+  export BEST_RU_DEST BEST_RU_HOST
 
   python3 <<'PY'
 import json, os
@@ -323,6 +449,8 @@ json_out = os.environ["JSON_OUT"]
 hints = os.environ["HINTS_OUT"]
 hosts = os.environ["HOSTS_OUT"]
 uris = os.environ["URIS_OUT"]
+ru_dest = os.environ.get("BEST_RU_DEST", "www.cloudflare.com:443")
+ru_host = os.environ.get("BEST_RU_HOST", "www.cloudflare.com")
 
 tag_vless = f"{prefix}-vless-443"
 tag_hy2 = f"{prefix}-hy2-443"
@@ -385,7 +513,7 @@ if "grpc" in selected:
       "security": "reality",
       "grpcSettings": {"multiMode": False, "serviceName": svc},
       "realitySettings": {
-        "dest": "www.apple.com:443",
+        "dest": ru_dest,
         "show": False,
         "xver": 0,
         "spiderX": "",
@@ -416,7 +544,7 @@ if "xhttp" in selected:
         "scMaxEachPostBytes": "1000000",
       },
       "realitySettings": {
-        "dest": "www.apple.com:443",
+        "dest": ru_dest,
         "show": False,
         "xver": 0,
         "spiderX": "",
@@ -449,17 +577,20 @@ with open(hints, "w", encoding="utf-8") as f:
   f.write(f"domain={domain}\npublicKey={pub}\nshortId={short}\nprivateKey={priv}\n")
   f.write(f"sni={domain}\naddress={domain}\nvless_port=443\nhy2_port=443/udp\n")
   f.write(f"grpc_port=8443\ngrpc_service={svc}\nxhttp_port=4443\n")
-  f.write("vless_flow=\n")  # пустой flow — критично для SelfSteal Reality
-  f.write("fingerprint=chrome\n")
+  f.write("vless_flow=\nfingerprint=chrome\n")
+  f.write(f"reality_dest={ru_dest}\nru_sni_best={ru_host}\n")
 
 with open(hosts, "w", encoding="utf-8") as f:
-  f.write(f"""# HOSTS / подписка Remnawave — скопируй значения в панель
-# ВАЖНО: для VLESS Reality SelfSteal flow должен быть ПУСТОЙ (не xtls-rprx-vision)
+  f.write(f"""# HOSTS / подписка Remnawave
+# VLESS Reality SelfSteal: flow ПУСТОЙ (не xtls-rprx-vision)
+# Client SNI = ваш домен ({domain}), не RU-сайт
+# RU dest ({ru_dest}) — только fingerprint Reality на gRPC/XHTTP (сервер→сайт)
 
 DOMAIN / SNI / Address = {domain}
 publicKey (pbk)        = {pub}
 shortId (sid)          = {short}
 fingerprint            = chrome
+reality_dest (grpc/xhttp) = {ru_dest}
 
 ## {tag_vless}
 inbound   = {tag_vless}
@@ -495,21 +626,15 @@ mode    = auto
 sni     = {domain}
 pbk     = {pub}
 sid     = {short}
-
-# После Save профиля:
-# 1) Node → Active Inbounds: все {prefix}-*
-# 2) Hosts обновить по этому файлу
-# 3) Клиенты → обновить подписку
 """)
 
 uuid = "00000000-0000-0000-0000-000000000000"
 with open(uris, "w", encoding="utf-8") as f:
-  f.write("# Пример URI (подставь UUID пользователя из панели)\n")
+  f.write("# Пример URI (подставь UUID пользователя). flow НЕ использовать.\n")
   f.write(f"vless://{uuid}@{domain}:443?encryption=none&type=tcp&security=reality&sni={domain}&fp=chrome&pbk={pub}&sid={short}#{prefix}-vless\n")
   f.write(f"vless://{uuid}@{domain}:8443?encryption=none&type=grpc&serviceName={svc}&mode=gun&security=reality&sni={domain}&fp=chrome&pbk={pub}&sid={short}#{prefix}-grpc\n")
   f.write(f"vless://{uuid}@{domain}:4443?encryption=none&type=xhttp&path=%2F&mode=auto&security=reality&sni={domain}&fp=chrome&pbk={pub}&sid={short}#{prefix}-xhttp\n")
   f.write(f"hysteria2://{uuid}@{domain}:443/?sni={domain}#{prefix}-hy2\n")
-  f.write("\n# НЕ используй flow=xtls-rprx-vision с этим SelfSteal Reality inbound\n")
 
 print("ok")
 PY
@@ -614,6 +739,10 @@ finalize() {
    shortId     = $SHORT_ID
    gRPC svc    = ${PREFIX}_grpc
    VLESS flow  = <ПУСТО>  ← не xtls-rprx-vision
+   Reality dest (gRPC/XHTTP) = ${BEST_RU_DEST}
+
+ Файлы ещё:
+   $RU_SNI_OUT
 
  Что сделать в панели (обязательно):
    1. Config Profiles → вставь $JSON_OUT
@@ -624,7 +753,10 @@ finalize() {
 EOF
   echo ""
   echo "----- HOSTS (кратко) -----"
-  grep -E 'DOMAIN|publicKey|shortId|flow|serviceName|## ' "$HOSTS_OUT" | head -40
+  grep -E 'DOMAIN|publicKey|shortId|flow|serviceName|reality_dest|## ' "$HOSTS_OUT" | head -40
+  echo ""
+  echo "----- TOP RU SNI -----"
+  grep -E '^(BEST|TOP3|[0-9]+\t)' "$RU_SNI_OUT" 2>/dev/null | head -8 || true
 }
 
 run_test_only() {
@@ -635,7 +767,9 @@ run_test_only() {
     PUBLIC_KEY=$(derive_public "$PRIVATE_KEY")
     SHORT_ID="${SHORT_ID:-unknown}"
   fi
+  probe_ru_snis
   run_tests
+  echo "BEST_RU_DEST=${BEST_RU_DEST}"
   exit $([[ $FAIL -eq 0 ]] && echo 0 || echo 2)
 }
 
@@ -665,6 +799,7 @@ main() {
   sync_hy2_certs
   setup_cron
   resolve_keys
+  probe_ru_snis
   build_outputs
   run_tests
   finalize

@@ -16,7 +16,7 @@
 #
 set -euo pipefail
 
-VERSION="1.0.0-selfsteal"
+VERSION="1.0.1-selfsteal"
 OUT_DIR="/opt/remnanode"
 JSON_OUT="${OUT_DIR}/config-profile-selfsteal.json"
 CERT_PERSIST="${OUT_DIR}/certs"
@@ -225,12 +225,20 @@ sync_hy2_certs() {
   cp -f /dev/shm/hysteria_key.pem  "$CERT_PERSIST/"
   chmod 600 "$CERT_PERSIST/hysteria_key.pem"
 
-  # LE path для Multi-Protocol checker (опционально)
-  mkdir -p "/etc/letsencrypt/live/${DOMAIN}"
-  ln -sfn "$CERT_PATH" "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
-  ln -sfn "$KEY_PATH"  "/etc/letsencrypt/live/${DOMAIN}/privkey.pem"
-  ln -sfn "$CERT_PATH" "/etc/letsencrypt/live/${DOMAIN}/cert.pem"
-  ln -sfn "$CERT_PATH" "/etc/letsencrypt/live/${DOMAIN}/chain.pem"
+  # LE path для Multi-Protocol checker — только если certs НЕ уже из live/
+  local le_live="/etc/letsencrypt/live/${DOMAIN}"
+  local le_full="${le_live}/fullchain.pem"
+  local le_key="${le_live}/privkey.pem"
+  if [[ "$CERT_PATH" == "$le_full" || "$CERT_PATH" -ef "$le_full" ]]; then
+    log_ok "Let's Encrypt live/ уже на месте — symlink не нужен"
+  else
+    mkdir -p "$le_live"
+    ln -sfn "$CERT_PATH" "$le_full"
+    ln -sfn "$KEY_PATH"  "$le_key"
+    ln -sfn "$CERT_PATH" "${le_live}/cert.pem"
+    ln -sfn "$CERT_PATH" "${le_live}/chain.pem"
+    log_ok "LE live/ symlink → источник certs"
+  fi
 
   # проверка внутри контейнера
   if ! docker exec remnanode openssl x509 -in /dev/shm/hysteria_cert.pem -noout -subject &>/dev/null; then

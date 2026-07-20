@@ -15,7 +15,7 @@
 #
 set -euo pipefail
 
-VERSION="1.0.3-selfsteal"
+VERSION="1.0.4-selfsteal"
 OUT_DIR="/opt/remnanode"
 JSON_OUT="${OUT_DIR}/config-profile-selfsteal.json"
 CERT_PERSIST="${OUT_DIR}/certs"
@@ -76,7 +76,7 @@ show_logo() {
   cat <<'EOF'
 ╔══════════════════════════════════════════════════════════════════╗
 ║          Remnawave SelfSteal Multi-Protocol Setup                ║
-║                     fixed · auto JSON · v1.0.3                   ║
+║                     fixed · auto JSON · v1.0.4                   ║
 ╚══════════════════════════════════════════════════════════════════╝
 EOF
 }
@@ -304,8 +304,14 @@ gen_reality_keys() {
   fi
   set -e
 
-  PRIVATE_KEY=$(printf '%s\n' "$out" | awk -F': *' 'BEGIN{IGNORECASE=1} /^Private(Key| key)?[[:space:]]*:/ {print $2; exit}' | tr -d '\r[:space:]')
-  PUBLIC_KEY=$(printf '%s\n' "$out" | awk -F': *' 'BEGIN{IGNORECASE=1} /^Public(Key| key)?[[:space:]]*:/ {print $2; exit}' | tr -d '\r[:space:]')
+  PRIVATE_KEY=$(printf '%s\n' "$out" | awk -F': *' '
+    BEGIN{IGNORECASE=1}
+    /^PrivateKey[[:space:]]*:/ || /^Private key[[:space:]]*:/ { gsub(/\r/,"",$2); gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2); print $2; exit }
+  ')
+  PUBLIC_KEY=$(printf '%s\n' "$out" | awk -F': *' '
+    BEGIN{IGNORECASE=1}
+    /PublicKey/ || /^Public key[[:space:]]*:/ { gsub(/\r/,"",$2); gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2); print $2; exit }
+  ')
 
   # fallback: sometimes only two base64-like lines
   if [[ -z "${PRIVATE_KEY:-}" || -z "${PUBLIC_KEY:-}" ]]; then

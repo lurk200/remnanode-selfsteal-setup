@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Remnawave SelfSteal Fix</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a222c;
+      --border: #2d3a47;
+      --text: #e7eef5;
+      --muted: #8b9bab;
+      --accent: #3d9a6a;
+      --accent-dim: #2a6b4a;
+      --warn: #d4a017;
+      --danger: #c45c5c;
+      --mono: "IBM Plex Mono", "Consolas", "Courier New", monospace;
+      --sans: "Segoe UI", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.45;
+    }
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 28px 20px 60px;
+    }
+    h1 {
+      font-size: 1.35rem;
+      font-weight: 650;
+      margin: 0 0 6px;
+      letter-spacing: -0.02em;
+    }
+    .sub {
+      color: var(--muted);
+      font-size: 0.92rem;
+      margin-bottom: 22px;
+    }
+    .grid {
+      display: grid;
+      gap: 14px;
+    }
+    @media (min-width: 900px) {
+      .grid-2 { grid-template-columns: 1fr 1fr; }
+    }
+    label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    input[type="text"], textarea {
+      width: 100%;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-family: var(--mono);
+      font-size: 0.82rem;
+    }
+    textarea {
+      min-height: 280px;
+      resize: vertical;
+      line-height: 1.4;
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: end;
+      margin: 14px 0;
+    }
+    .field { flex: 1; min-width: 200px; }
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 11px 16px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      background: var(--accent);
+      color: #fff;
+    }
+    button:hover { background: var(--accent-dim); }
+    button.secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    button.secondary:hover { border-color: var(--muted); }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-top: 14px;
+    }
+    .panel h2 {
+      margin: 0 0 10px;
+      font-size: 0.95rem;
+    }
+    .changes {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+    .changes li { margin: 4px 0; }
+    .ok { color: var(--accent); }
+    .warn { color: var(--warn); }
+    .err { color: var(--danger); }
+    .status {
+      min-height: 1.2em;
+      font-size: 0.88rem;
+      margin: 8px 0 0;
+    }
+    pre.cmd {
+      background: #0a0e12;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      overflow-x: auto;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin: 0;
+    }
+    ol.steps {
+      margin: 0;
+      padding-left: 20px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    ol.steps li { margin: 8px 0; }
+    ol.steps code {
+      background: #0a0e12;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-family: var(--mono);
+      font-size: 0.82em;
+      color: var(--text);
+    }
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .note {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Remnawave SelfSteal Fix</h1>
+    <p class="sub">
+      Исправляет Xray Config Profile: Reality → локальный Caddy socket,
+      serverNames → ваш selfsteal-домен. Всё только в браузере, ничего никуда не отправляется.
+    </p>
+
+    <div class="row">
+      <div class="field">
+        <label for="domain">SelfSteal домен</label>
+        <input id="domain" type="text" placeholder="pl.lurk-vpn.online" spellcheck="false" />
+      </div>
+      <button type="button" id="btnFix">Исправить конфиг</button>
+      <button type="button" class="secondary" id="btnSample">Вставить пример</button>
+    </div>
+
+    <div class="grid grid-2">
+      <div>
+        <label for="input">Исходный JSON</label>
+        <textarea id="input" spellcheck="false" placeholder="Вставь Config Profile JSON…"></textarea>
+      </div>
+      <div>
+        <label for="output">Исправленный JSON</label>
+        <textarea id="output" spellcheck="false" readonly placeholder="Здесь будет результат…"></textarea>
+        <div class="toolbar">
+          <button type="button" class="secondary" id="btnCopyJson">Копировать JSON</button>
+        </div>
+      </div>
+    </div>
+    <p class="status" id="status"></p>
+
+    <div class="panel" id="changesPanel" hidden>
+      <h2>Что изменено</h2>
+      <ul class="changes" id="changes"></ul>
+    </div>
+
+    <div class="panel">
+      <h2>Инструкция</h2>
+      <ol class="steps">
+        <li>Вставь Config Profile из панели Remnawave и укажи selfsteal-домен ноды.</li>
+        <li>Нажми <strong>Исправить конфиг</strong> → скопируй JSON → вставь в панель → Save.</li>
+        <li>У ноды включи все <strong>Active Inbounds</strong> заново (после смены тегов иначе профиль сбросится).</li>
+        <div></div>
+        <li>На сервере ноды выполни одну команду ниже (HY2 certs + проверка).</li>
+        <li>Проверь: <code>curl -sI https://ДОМЕН/</code> → <span class="ok">HTTP/2 200</span>, <code>Server: Caddy</code>.</li>
+      </ol>
+    </div>
+
+    <div class="panel">
+      <h2>Команда для сервера ноды (одной строкой)</h2>
+      <pre class="cmd" id="serverCmd">Укажи домен и нажми «Исправить конфиг»</pre>
+      <div class="toolbar">
+        <button type="button" class="secondary" id="btnCopyCmd">Копировать команду</button>
+      </div>
+      <p class="note">
+        Копирует certs в <code>/dev/shm</code> (не symlink — remnanode их не видит через LE),
+        сохраняет копию в <code>/opt/remnanode/certs</code>, ставит <code>@reboot</code> restore,
+        опционально делает <code>/etc/letsencrypt/live/…</code> для чекера Multi-Protocol.
+      </p>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    const SAMPLE = {
+      log: { loglevel: "none" },
+      inbounds: [
+        {
+          tag: "www-vless-443",
+          port: 443,
+          listen: "0.0.0.0",
+          protocol: "vless",
+          settings: {
+            clients: [],
+            fallbacks: [{ dest: "unix:/dev/shm/nginx.sock", xver: 0 }],
+            decryption: "none"
+          },
+          sniffing: { enabled: true, destOverride: ["http", "tls", "quic"] },
+          streamSettings: {
+            network: "raw",
+            security: "reality",
+            realitySettings: {
+              show: false,
+              xver: 0,
+              target: "www.vtb.ru:443",
+              shortIds: ["ab32"],
+              privateKey: "REPLACE_ME",
+              serverNames: ["www.vtb.ru"]
+            }
+          }
+        },
+        {
+          tag: "www-hy2-443",
+          port: 443,
+          listen: "0.0.0.0",
+          protocol: "hysteria",
+          settings: { clients: [], version: 2 },
+          streamSettings: {
+            network: "hysteria",
+            security: "tls",
+            finalmask: { quicParams: { debug: false, congestion: "bbr" } },
+            tlsSettings: {
+              alpn: ["h3"],
+              certificates: [
+                {
+                  keyFile: "/dev/shm/hysteria_key.pem",
+                  certificateFile: "/dev/shm/hysteria_cert.pem"
+                }
+              ]
+            },
+            hysteriaSettings: { version: 2 }
+          }
+        },
+        {
+          tag: "www-grpc-8443",
+          port: 8443,
+          listen: "0.0.0.0",
+          protocol: "vless",
+          settings: { clients: [], decryption: "none" },
+          streamSettings: {
+            network: "grpc",
+            security: "reality",
+            grpcSettings: { multiMode: false, serviceName: "www_grpc" },
+            realitySettings: {
+              dest: "www.vtb.ru:443",
+              show: false,
+              xver: 0,
+              spiderX: "",
+              shortIds: ["ab32"],
+              privateKey: "REPLACE_ME",
+              serverNames: ["www.vtb.ru"]
+            }
+          }
+        },
+        {
+          tag: "www-xhttp-4443",
+          port: 4443,
+          listen: "0.0.0.0",
+          protocol: "vless",
+          settings: { clients: [], decryption: "none" },
+          sniffing: { enabled: true, destOverride: ["http", "tls", "quic"] },
+          streamSettings: {
+            network: "xhttp",
+            security: "reality",
+            xhttpSettings: {
+              mode: "auto",
+              path: "/",
+              noGRPCHeader: false,
+              xPaddingBytes: "100-1000",
+              scMaxBufferedPosts: 30,
+              scMaxEachPostBytes: "1000000"
+            },
+            realitySettings: {
+              dest: "www.vtb.ru:443",
+              show: false,
+              xver: 0,
+              spiderX: "",
+              shortIds: ["ab32"],
+              privateKey: "REPLACE_ME",
+              serverNames: ["www.vtb.ru"]
+            }
+          }
+        }
+      ],
+      outbounds: [
+        { tag: "DIRECT", protocol: "freedom" },
+        { tag: "BLOCK", protocol: "blackhole" }
+      ],
+      routing: {
+        rules: [
+          { ip: ["geoip:private"], outboundTag: "BLOCK" },
+          { domain: ["geosite:private"], outboundTag: "BLOCK" },
+          { protocol: ["bittorrent"], outboundTag: "BLOCK" }
+        ]
+      }
+    };
+
+    function isSelfStealInbound(ib) {
+      const ss = ib.streamSettings || {};
+      if (ss.security !== "reality") return false;
+      const net = ss.network || "";
+      // TCP Reality on 443 (raw/tcp/empty) — это SelfSteal front
+      if (ib.port === 443 && (net === "raw" || net === "tcp" || net === "")) return true;
+      if (ib.protocol === "vless" && ib.port === 443 && net !== "grpc" && net !== "xhttp" && net !== "hysteria") {
+        return true;
+      }
+      return false;
+    }
+
+    function buildServerCmd(domain) {
+      const d = domain.replace(/'/g, "");
+      return `DOMAIN='${d}' bash -c '
+set -euo pipefail
+echo "[1/5] Domain: $DOMAIN"
+# certs: LE или Caddy volume
+CRT=""
+KEY=""
+if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+  CRT="/etc/letsencrypt/live/$DOMAIN/fullchain.pem"
+  KEY="/etc/letsencrypt/live/$DOMAIN/privkey.pem"
+else
+  CRT=$(find /var/lib/docker/volumes/caddy_data/_data -name "$DOMAIN.crt" 2>/dev/null | head -1 || true)
+  KEY=$(find /var/lib/docker/volumes/caddy_data/_data -name "$DOMAIN.key" 2>/dev/null | head -1 || true)
+fi
+[ -n "$CRT" ] && [ -n "$KEY" ] || { echo "ERROR: cert/key for $DOMAIN not found"; exit 1; }
+echo "[2/5] Copy HY2 certs to /dev/shm (real files, not symlinks)"
+cp -L "$CRT" /dev/shm/hysteria_cert.pem
+cp -L "$KEY"  /dev/shm/hysteria_key.pem
+chmod 644 /dev/shm/hysteria_cert.pem
+chmod 600 /dev/shm/hysteria_key.pem
+echo "[3/5] Persist for reboot"
+mkdir -p /opt/remnanode/certs
+cp -f /dev/shm/hysteria_cert.pem /opt/remnanode/certs/
+cp -f /dev/shm/hysteria_key.pem  /opt/remnanode/certs/
+chmod 600 /opt/remnanode/certs/hysteria_key.pem
+cat > /opt/remnanode/restore-hy2-certs.sh <<EOF
+#!/bin/bash
+cp -f /opt/remnanode/certs/hysteria_cert.pem /dev/shm/hysteria_cert.pem
+cp -f /opt/remnanode/certs/hysteria_key.pem  /dev/shm/hysteria_key.pem
+chmod 644 /dev/shm/hysteria_cert.pem
+chmod 600 /dev/shm/hysteria_key.pem
+EOF
+chmod +x /opt/remnanode/restore-hy2-certs.sh
+(crontab -l 2>/dev/null | grep -v restore-hy2-certs; echo "@reboot /opt/remnanode/restore-hy2-certs.sh") | crontab -
+echo "[4/5] Optional LE path for Multi-Protocol checker"
+mkdir -p "/etc/letsencrypt/live/$DOMAIN"
+ln -sfn "$CRT" "/etc/letsencrypt/live/$DOMAIN/fullchain.pem"
+ln -sfn "$KEY"  "/etc/letsencrypt/live/$DOMAIN/privkey.pem"
+ln -sfn "$CRT" "/etc/letsencrypt/live/$DOMAIN/cert.pem"
+ln -sfn "$CRT" "/etc/letsencrypt/live/$DOMAIN/chain.pem"
+echo "[5/5] Checks"
+ls -la /dev/shm/hysteria_*.pem /dev/shm/nginx.sock 2>/dev/null || true
+docker exec remnanode openssl x509 -in /dev/shm/hysteria_cert.pem -noout -subject 2>/dev/null || true
+curl -sI "https://$DOMAIN/" | head -10
+echo "DONE. In panel: paste fixed JSON, enable Active Inbounds, Save."
+'`;
+    }
+
+    function fixConfig(cfg, domain) {
+      const changes = [];
+      const clone = JSON.parse(JSON.stringify(cfg));
+      const inbounds = clone.inbounds || [];
+
+      for (const ib of inbounds) {
+        const tag = ib.tag || "(no-tag)";
+        const ss = ib.streamSettings || {};
+
+        // Remove useless/wrong VLESS fallbacks (Reality uses target, not settings.fallbacks)
+        if (ib.settings && Array.isArray(ib.settings.fallbacks)) {
+          changes.push(`<span class="warn">${tag}</span>: удалены settings.fallbacks (для Reality не работают)`);
+          delete ib.settings.fallbacks;
+        }
+
+        if (ss.security === "reality" && ss.realitySettings) {
+          const rs = ss.realitySettings;
+          const prevNames = JSON.stringify(rs.serverNames || []);
+          rs.serverNames = [domain];
+          if (prevNames !== JSON.stringify([domain])) {
+            changes.push(`<span class="ok">${tag}</span>: serverNames → <code>${domain}</code>`);
+          }
+
+          if (isSelfStealInbound(ib)) {
+            const prevTarget = rs.target || rs.dest || "";
+            rs.target = "/dev/shm/nginx.sock";
+            rs.xver = 1;
+            if (rs.dest && rs.dest !== "/dev/shm/nginx.sock") {
+              // prefer target for modern xray; drop conflicting dest on TCP selfsteal
+              delete rs.dest;
+            }
+            changes.push(
+              `<span class="ok">${tag}</span>: SelfSteal target <code>${prevTarget || "?"}</code> → <code>/dev/shm/nginx.sock</code>, xver=1`
+            );
+          }
+        }
+      }
+
+      if (!changes.length) {
+        changes.push('<span class="warn">Явных правок не потребовалось (уже похоже на SelfSteal)</span>');
+      }
+
+      return { config: clone, changes };
+    }
+
+    function setStatus(msg, cls) {
+      const el = $("status");
+      el.className = "status " + (cls || "");
+      el.innerHTML = msg;
+    }
+
+    async function copyText(text) {
+      await navigator.clipboard.writeText(text);
+    }
+
+    $("btnSample").onclick = () => {
+      $("input").value = JSON.stringify(SAMPLE, null, 2);
+      if (!$("domain").value) $("domain").value = "example.lurk-vpn.online";
+      setStatus("Пример вставлен. Укажи свой домен и нажми «Исправить».", "warn");
+    };
+
+    $("btnFix").onclick = () => {
+      const domain = $("domain").value.trim().toLowerCase();
+      if (!domain || !/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(domain)) {
+        setStatus("Укажи корректный selfsteal-домен (например pl.lurk-vpn.online).", "err");
+        return;
+      }
+
+      let cfg;
+      try {
+        cfg = JSON.parse($("input").value);
+      } catch (e) {
+        setStatus("JSON невалиден: " + e.message, "err");
+        return;
+      }
+
+      if (!cfg.inbounds || !Array.isArray(cfg.inbounds)) {
+        setStatus("В конфиге нет массива inbounds.", "err");
+        return;
+      }
+
+      const { config, changes } = fixConfig(cfg, domain);
+      $("output").value = JSON.stringify(config, null, 2);
+      $("serverCmd").textContent = buildServerCmd(domain);
+
+      const list = $("changes");
+      list.innerHTML = changes.map((c) => `<li>${c}</li>`).join("");
+      $("changesPanel").hidden = false;
+      setStatus("Готово. Скопируй JSON в панель и выполни команду на ноде.", "ok");
+    };
+
+    $("btnCopyJson").onclick = async () => {
+      const t = $("output").value;
+      if (!t) return setStatus("Сначала исправь конфиг.", "err");
+      await copyText(t);
+      setStatus("JSON скопирован.", "ok");
+    };
+
+    $("btnCopyCmd").onclick = async () => {
+      const t = $("serverCmd").textContent;
+      if (!t || t.startsWith("Укажи")) return setStatus("Сначала исправь конфиг.", "err");
+      await copyText(t);
+      setStatus("Команда скопирована.", "ok");
+    };
+
+    $("domain").addEventListener("input", () => {
+      const d = $("domain").value.trim();
+      if (d && $("output").value) {
+        $("serverCmd").textContent = buildServerCmd(d);
+      }
+    });
+  </script>
+</body>
+</html>

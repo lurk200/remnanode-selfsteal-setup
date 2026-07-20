@@ -11,18 +11,20 @@
 #   - генерирует готовый Config Profile JSON
 #
 # Запуск:
-#   bash remnanode-selfsteal-setup.sh
-#   bash remnanode-selfsteal-setup.sh --yes --all
+#   bash <(curl -fsSL https://raw.githubusercontent.com/lurk200/remnanode-selfsteal-setup/main/setup.sh) --yes --all
 #
 set -euo pipefail
 
-VERSION="1.0.1-selfsteal"
+VERSION="1.0.2-selfsteal"
 OUT_DIR="/opt/remnanode"
 JSON_OUT="${OUT_DIR}/config-profile-selfsteal.json"
 CERT_PERSIST="${OUT_DIR}/certs"
 
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
-BLUE='\033[0;34m'; NC='\033[0m'
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
 
 log_ok()    { echo -e "${GREEN}[✓]${NC} $1"; }
 log_info()  { echo -e "${BLUE}[•]${NC} $1"; }
@@ -40,20 +42,19 @@ PUBLIC_KEY_OPT=""
 SHORT_ID_OPT=""
 
 usage() {
-  cat <<EOF
-Usage: $0 [options]
+  cat <<'USAGE'
+Usage: setup.sh [options]
 
   --yes, -y          без вопросов (все протоколы)
   --all              hy2 + grpc + xhttp
-  --domain NAME      selfsteal домен (иначе из compose/Caddy/LE)
-  --prefix TAG       префикс тегов (по умолчанию из домена: ger / pl / yt / www)
-  --reuse-keys       взять ключи из ${OUT_DIR}/reality-client-hints.txt если есть
-  --private-key K    свой Reality privateKey (не ломать клиентов)
+  --domain NAME      selfsteal домен
+  --prefix TAG       префикс тегов (ger / pl / yt / www)
+  --reuse-keys       взять ключи из /opt/remnanode/reality-client-hints.txt
+  --private-key K    свой Reality privateKey
   --public-key K     соответствующий publicKey
   --short-id HEX     shortId
   -h, --help         help
-
-EOF
+USAGE
 }
 
 while [[ $# -gt 0 ]]; do
@@ -72,10 +73,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 show_logo() {
-  cat << 'EOF'
+  cat <<'EOF'
 ╔══════════════════════════════════════════════════════════════════╗
 ║          Remnawave SelfSteal Multi-Protocol Setup                ║
-║                     fixed · auto JSON · v1.0                     ║
+║                     fixed · auto JSON · v1.0.2                   ║
 ╚══════════════════════════════════════════════════════════════════╝
 EOF
 }
@@ -88,27 +89,23 @@ detect_domain() {
     return
   fi
 
-  # 1) docker-compose SELF_STEAL_DOMAIN
   if [[ -f /opt/remnanode/docker-compose.yml ]]; then
     DOMAIN=$(grep -E 'SELF_STEAL_DOMAIN=' /opt/remnanode/docker-compose.yml 2>/dev/null \
       | head -1 | sed -E 's/.*SELF_STEAL_DOMAIN=//;s/["'\'']//g' | tr -d '[:space:]' || true)
     [[ -n "${DOMAIN:-}" ]] && return
   fi
 
-  # 2) Caddyfile env already expanded? try compose env in running caddy
-  if docker ps --format '{{.Names}}' | grep -qx 'caddy-remnawave'; then
+  if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'caddy-remnawave'; then
     DOMAIN=$(docker inspect caddy-remnawave --format '{{range .Config.Env}}{{println .}}{{end}}' \
       | grep '^SELF_STEAL_DOMAIN=' | cut -d= -f2- | head -1 || true)
     [[ -n "${DOMAIN:-}" ]] && return
   fi
 
-  # 3) LE live
   if [[ -d /etc/letsencrypt/live ]]; then
     DOMAIN=$(ls /etc/letsencrypt/live 2>/dev/null | grep -v README | head -1 || true)
     [[ -n "${DOMAIN:-}" ]] && return
   fi
 
-  # 4) Caddy volume certs
   local crt
   crt=$(find /var/lib/docker/volumes/caddy_data/_data/caddy/certificates -name '*.crt' 2>/dev/null | head -1 || true)
   if [[ -n "$crt" ]]; then
@@ -116,8 +113,7 @@ detect_domain() {
     return
   fi
 
-  fatal "Не удалось определить SELF_STEAL_DOMAIN" \
-    "Запустите с --domain ger.lurk-vpn.online"
+  fatal "Не удалось определить SELF_STEAL_DOMAIN" "Запустите с --domain ger.lurk-vpn.online"
 }
 
 detect_prefix() {
@@ -125,7 +121,6 @@ detect_prefix() {
     PREFIX="$TAG_PREFIX"
     return
   fi
-  # ger.lurk-vpn.online → ger
   local sub
   sub=$(echo "$DOMAIN" | cut -d. -f1)
   case "$sub" in
@@ -153,8 +148,7 @@ find_certs() {
     return
   fi
 
-  fatal "Сертификат для ${DOMAIN} не найден" \
-    "Нужен LE live/ или Caddy volume caddy_data"
+  fatal "Сертификат для ${DOMAIN} не найден" "Нужен LE live/ или Caddy volume caddy_data"
 }
 
 preflight() {
@@ -176,8 +170,11 @@ preflight() {
     || fatal "/dev/shm не примонтирован в remnanode"
   log_ok "/dev/shm mounted"
 
-  [[ -S /dev/shm/nginx.sock ]] || log_warn "/dev/shm/nginx.sock нет — Caddy SelfSteal должен создать socket"
-  [[ -S /dev/shm/nginx.sock ]] && log_ok "nginx.sock есть"
+  if [[ -S /dev/shm/nginx.sock ]]; then
+    log_ok "nginx.sock есть"
+  else
+    log_warn "/dev/shm/nginx.sock нет — Caddy SelfSteal должен создать socket"
+  fi
 
   detect_domain
   detect_prefix
@@ -211,7 +208,7 @@ open_port() {
 
 sync_hy2_certs() {
   log_info "HY2 certs → /dev/shm (реальные файлы, не symlink)..."
-  # убрать битые symlink
+
   if [[ -L /dev/shm/hysteria_cert.pem ]]; then rm -f /dev/shm/hysteria_cert.pem; fi
   if [[ -L /dev/shm/hysteria_key.pem ]]; then rm -f /dev/shm/hysteria_key.pem; fi
 
@@ -225,22 +222,19 @@ sync_hy2_certs() {
   cp -f /dev/shm/hysteria_key.pem  "$CERT_PERSIST/"
   chmod 600 "$CERT_PERSIST/hysteria_key.pem"
 
-  # LE path для Multi-Protocol checker — только если certs НЕ уже из live/
-  local le_live="/etc/letsencrypt/live/${DOMAIN}"
-  local le_full="${le_live}/fullchain.pem"
-  local le_key="${le_live}/privkey.pem"
-  if [[ "$CERT_PATH" == "$le_full" || "$CERT_PATH" -ef "$le_full" ]]; then
+  # Не делаем ln сам на себя, если cert уже в LE live/
+  local le_full="/etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
+  if [[ "$CERT_PATH" == "$le_full" ]]; then
     log_ok "Let's Encrypt live/ уже на месте — symlink не нужен"
   else
-    mkdir -p "$le_live"
-    ln -sfn "$CERT_PATH" "$le_full"
-    ln -sfn "$KEY_PATH"  "$le_key"
-    ln -sfn "$CERT_PATH" "${le_live}/cert.pem"
-    ln -sfn "$CERT_PATH" "${le_live}/chain.pem"
+    mkdir -p "/etc/letsencrypt/live/${DOMAIN}"
+    ln -sfn "$CERT_PATH" "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
+    ln -sfn "$KEY_PATH"  "/etc/letsencrypt/live/${DOMAIN}/privkey.pem"
+    ln -sfn "$CERT_PATH" "/etc/letsencrypt/live/${DOMAIN}/cert.pem"
+    ln -sfn "$CERT_PATH" "/etc/letsencrypt/live/${DOMAIN}/chain.pem"
     log_ok "LE live/ symlink → источник certs"
   fi
 
-  # проверка внутри контейнера
   if ! docker exec remnanode openssl x509 -in /dev/shm/hysteria_cert.pem -noout -subject &>/dev/null; then
     fatal "Контейнер не читает /dev/shm/hysteria_cert.pem"
   fi
@@ -262,22 +256,19 @@ chmod 600 /dev/shm/hysteria_key.pem
 EOF
   chmod +x /opt/remnanode/restore-hy2-certs.sh
 
-  local daily="15 4 * * * /opt/remnanode/restore-hy2-certs.sh"
-  # если LE обновился — пересинхронизировать из источника
-  local daily_sync="20 4 * * * /opt/remnanode/restore-hy2-certs.sh"
   if crontab -l 2>/dev/null | grep -q 'restore-hy2-certs'; then
     log_ok "Cron restore уже есть"
   else
-    (crontab -l 2>/dev/null | grep -v hysteria_cert || true
-     echo "@reboot /opt/remnanode/restore-hy2-certs.sh"
-     echo "$daily"
+    (
+      crontab -l 2>/dev/null | grep -v hysteria_cert || true
+      echo "@reboot /opt/remnanode/restore-hy2-certs.sh"
+      echo "15 4 * * * /opt/remnanode/restore-hy2-certs.sh"
     ) | crontab -
     log_ok "Cron @reboot + daily restore добавлен"
   fi
 }
 
 gen_reality_keys() {
-  # явные ключи / reuse — чтобы не ломать существующих клиентов
   if [[ -n "$PRIVATE_KEY_OPT" ]]; then
     PRIVATE_KEY="$PRIVATE_KEY_OPT"
     PUBLIC_KEY="${PUBLIC_KEY_OPT:-}"
@@ -288,8 +279,6 @@ gen_reality_keys() {
   fi
 
   if [[ "$REUSE_KEYS" == "true" && -f "${OUT_DIR}/reality-client-hints.txt" ]]; then
-    # shellcheck disable=SC1090
-    # формат key=value
     PRIVATE_KEY=$(grep '^privateKey=' "${OUT_DIR}/reality-client-hints.txt" | cut -d= -f2-)
     PUBLIC_KEY=$(grep '^publicKey=' "${OUT_DIR}/reality-client-hints.txt" | cut -d= -f2-)
     SHORT_ID=$(grep '^shortId=' "${OUT_DIR}/reality-client-hints.txt" | cut -d= -f2-)
@@ -301,7 +290,7 @@ gen_reality_keys() {
   fi
 
   log_info "Генерация НОВЫХ Reality ключей (клиентов нужно обновить)..."
-  local out
+  local out=""
   if out=$(docker exec remnanode /usr/local/bin/xray x25519 2>/dev/null); then
     :
   elif out=$(docker exec remnanode xray x25519 2>/dev/null); then
@@ -312,7 +301,7 @@ gen_reality_keys() {
 
   PRIVATE_KEY=$(echo "$out" | grep -iE 'Private( key)?:' | head -1 | awk '{print $NF}' | tr -d '\r')
   PUBLIC_KEY=$(echo "$out" | grep -iE 'Public( key)?:' | head -1 | awk '{print $NF}' | tr -d '\r')
-  [[ -n "$PRIVATE_KEY" && -n "$PUBLIC_KEY" ]] || fatal "Не распарсил x25519 вывод:\n$out"
+  [[ -n "$PRIVATE_KEY" && -n "$PUBLIC_KEY" ]] || fatal "Не распарсил x25519 вывод: $out"
 
   SHORT_ID=$(openssl rand -hex 4)
   log_ok "Reality keys готовы (shortId=${SHORT_ID})"
@@ -354,211 +343,154 @@ build_json() {
   local tag_xhttp="${PREFIX}-xhttp-4443"
   local svc_grpc="${PREFIX}_grpc"
 
-  # inbounds array build
-  local ib_vless ib_hy2 ib_grpc ib_xhttp
-  ib_vless=$(cat <<EOF
-    {
-      "tag": "${tag_vless}",
-      "port": 443,
-      "listen": "0.0.0.0",
-      "protocol": "vless",
-      "settings": {
-        "clients": [],
-        "decryption": "none"
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls", "quic"]
-      },
-      "streamSettings": {
-        "network": "raw",
-        "security": "reality",
-        "realitySettings": {
-          "xver": 1,
-          "target": "/dev/shm/nginx.sock",
-          "shortIds": ["${SHORT_ID}"],
-          "privateKey": "${PRIVATE_KEY}",
-          "serverNames": ["${DOMAIN}"]
-        }
-      }
-    }
-EOF
-)
+  python3 - "$JSON_OUT" <<'PY' || fatal "python3 нужен для сборки JSON"
+import json, os, sys
 
-  ib_hy2=$(cat <<EOF
-    {
-      "tag": "${tag_hy2}",
-      "port": 443,
-      "listen": "0.0.0.0",
-      "protocol": "hysteria",
-      "settings": {
-        "clients": [],
-        "version": 2
-      },
-      "streamSettings": {
-        "network": "hysteria",
-        "security": "tls",
-        "finalmask": {
-          "quicParams": {
-            "debug": false,
-            "congestion": "bbr"
-          }
-        },
-        "tlsSettings": {
-          "alpn": ["h3"],
-          "certificates": [
-            {
-              "keyFile": "/dev/shm/hysteria_key.pem",
-              "certificateFile": "/dev/shm/hysteria_cert.pem"
-            }
-          ]
-        },
-        "hysteriaSettings": {
-          "version": 2
-        }
-      }
-    }
-EOF
-)
+out = sys.argv[1]
+domain = os.environ["DOMAIN"]
+prefix = os.environ["PREFIX"]
+priv = os.environ["PRIVATE_KEY"]
+pub = os.environ.get("PUBLIC_KEY", "")
+short = os.environ["SHORT_ID"]
+selected = os.environ.get("SELECTED", "hy2 grpc xhttp").split()
 
-  ib_grpc=$(cat <<EOF
-    {
-      "tag": "${tag_grpc}",
-      "port": 8443,
-      "listen": "0.0.0.0",
-      "protocol": "vless",
-      "settings": {
-        "clients": [],
-        "decryption": "none"
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls", "quic"]
-      },
-      "streamSettings": {
-        "network": "grpc",
-        "security": "reality",
-        "grpcSettings": {
-          "multiMode": false,
-          "serviceName": "${svc_grpc}"
-        },
-        "realitySettings": {
-          "dest": "www.apple.com:443",
-          "show": false,
-          "xver": 0,
-          "spiderX": "",
-          "shortIds": ["${SHORT_ID}"],
-          "privateKey": "${PRIVATE_KEY}",
-          "serverNames": ["${DOMAIN}"]
-        }
-      }
-    }
-EOF
-)
+tag_vless = f"{prefix}-vless-443"
+tag_hy2 = f"{prefix}-hy2-443"
+tag_grpc = f"{prefix}-grpc-8443"
+tag_xhttp = f"{prefix}-xhttp-4443"
+svc_grpc = f"{prefix}_grpc"
 
-  ib_xhttp=$(cat <<EOF
-    {
-      "tag": "${tag_xhttp}",
-      "port": 4443,
-      "listen": "0.0.0.0",
-      "protocol": "vless",
-      "settings": {
-        "clients": [],
-        "decryption": "none"
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls", "quic"]
-      },
-      "streamSettings": {
-        "network": "xhttp",
-        "security": "reality",
-        "xhttpSettings": {
-          "mode": "auto",
-          "path": "/",
-          "noGRPCHeader": false,
-          "xPaddingBytes": "100-1000",
-          "scMaxBufferedPosts": 30,
-          "scMaxEachPostBytes": "1000000"
-        },
-        "realitySettings": {
-          "dest": "www.apple.com:443",
-          "show": false,
-          "xver": 0,
-          "spiderX": "",
-          "shortIds": ["${SHORT_ID}"],
-          "privateKey": "${PRIVATE_KEY}",
-          "serverNames": ["${DOMAIN}"]
-        }
-      }
-    }
-EOF
-)
-
-  local parts=("$ib_vless")
-  for p in "${SELECTED[@]}"; do
-    case "$p" in
-      hy2)   parts+=("$ib_hy2") ;;
-      grpc)  parts+=("$ib_grpc") ;;
-      xhttp) parts+=("$ib_xhttp") ;;
-    esac
-  done
-
-  local joined
-  joined=$(printf ",\n%s" "${parts[@]}")
-  joined=${joined:2}
-
-  cat > "$JSON_OUT" <<EOF
-{
-  "log": {
-    "loglevel": "none"
-  },
-  "inbounds": [
-${joined}
-  ],
-  "outbounds": [
-    {
-      "tag": "DIRECT",
-      "protocol": "freedom"
+inbounds = [{
+  "tag": tag_vless,
+  "port": 443,
+  "listen": "0.0.0.0",
+  "protocol": "vless",
+  "settings": {"clients": [], "decryption": "none"},
+  "sniffing": {"enabled": True, "destOverride": ["http", "tls", "quic"]},
+  "streamSettings": {
+    "network": "raw",
+    "security": "reality",
+    "realitySettings": {
+      "xver": 1,
+      "target": "/dev/shm/nginx.sock",
+      "shortIds": [short],
+      "privateKey": priv,
+      "serverNames": [domain],
     },
-    {
-      "tag": "BLOCK",
-      "protocol": "blackhole"
-    }
+  },
+}]
+
+if "hy2" in selected:
+  inbounds.append({
+    "tag": tag_hy2,
+    "port": 443,
+    "listen": "0.0.0.0",
+    "protocol": "hysteria",
+    "settings": {"clients": [], "version": 2},
+    "streamSettings": {
+      "network": "hysteria",
+      "security": "tls",
+      "finalmask": {"quicParams": {"debug": False, "congestion": "bbr"}},
+      "tlsSettings": {
+        "alpn": ["h3"],
+        "certificates": [{
+          "keyFile": "/dev/shm/hysteria_key.pem",
+          "certificateFile": "/dev/shm/hysteria_cert.pem",
+        }],
+      },
+      "hysteriaSettings": {"version": 2},
+    },
+  })
+
+if "grpc" in selected:
+  inbounds.append({
+    "tag": tag_grpc,
+    "port": 8443,
+    "listen": "0.0.0.0",
+    "protocol": "vless",
+    "settings": {"clients": [], "decryption": "none"},
+    "sniffing": {"enabled": True, "destOverride": ["http", "tls", "quic"]},
+    "streamSettings": {
+      "network": "grpc",
+      "security": "reality",
+      "grpcSettings": {"multiMode": False, "serviceName": svc_grpc},
+      "realitySettings": {
+        "dest": "www.apple.com:443",
+        "show": False,
+        "xver": 0,
+        "spiderX": "",
+        "shortIds": [short],
+        "privateKey": priv,
+        "serverNames": [domain],
+      },
+    },
+  })
+
+if "xhttp" in selected:
+  inbounds.append({
+    "tag": tag_xhttp,
+    "port": 4443,
+    "listen": "0.0.0.0",
+    "protocol": "vless",
+    "settings": {"clients": [], "decryption": "none"},
+    "sniffing": {"enabled": True, "destOverride": ["http", "tls", "quic"]},
+    "streamSettings": {
+      "network": "xhttp",
+      "security": "reality",
+      "xhttpSettings": {
+        "mode": "auto",
+        "path": "/",
+        "noGRPCHeader": False,
+        "xPaddingBytes": "100-1000",
+        "scMaxBufferedPosts": 30,
+        "scMaxEachPostBytes": "1000000",
+      },
+      "realitySettings": {
+        "dest": "www.apple.com:443",
+        "show": False,
+        "xver": 0,
+        "spiderX": "",
+        "shortIds": [short],
+        "privateKey": priv,
+        "serverNames": [domain],
+      },
+    },
+  })
+
+cfg = {
+  "log": {"loglevel": "none"},
+  "inbounds": inbounds,
+  "outbounds": [
+    {"tag": "DIRECT", "protocol": "freedom"},
+    {"tag": "BLOCK", "protocol": "blackhole"},
   ],
   "routing": {
     "rules": [
-      {
-        "ip": ["geoip:private"],
-        "outboundTag": "BLOCK"
-      },
-      {
-        "domain": ["geosite:private"],
-        "outboundTag": "BLOCK"
-      },
-      {
-        "protocol": ["bittorrent"],
-        "outboundTag": "BLOCK"
-      }
+      {"ip": ["geoip:private"], "outboundTag": "BLOCK"},
+      {"domain": ["geosite:private"], "outboundTag": "BLOCK"},
+      {"protocol": ["bittorrent"], "outboundTag": "BLOCK"},
     ]
-  }
+  },
 }
-EOF
 
-  # meta file for clients
-  cat > "${OUT_DIR}/reality-client-hints.txt" <<EOF
-domain=${DOMAIN}
-publicKey=${PUBLIC_KEY}
-shortId=${SHORT_ID}
-privateKey=${PRIVATE_KEY}
-sni=${DOMAIN}
-address=${DOMAIN}
-vless_port=443
-hy2_port=443/udp
-grpc_port=8443
-grpc_service=${svc_grpc}
-xhttp_port=4443
-EOF
+with open(out, "w", encoding="utf-8") as f:
+  json.dump(cfg, f, indent=2, ensure_ascii=False)
+  f.write("\n")
+
+hints = os.path.join(os.path.dirname(out), "reality-client-hints.txt")
+with open(hints, "w", encoding="utf-8") as f:
+  f.write(f"domain={domain}\n")
+  f.write(f"publicKey={pub}\n")
+  f.write(f"shortId={short}\n")
+  f.write(f"privateKey={priv}\n")
+  f.write(f"sni={domain}\n")
+  f.write(f"address={domain}\n")
+  f.write("vless_port=443\n")
+  f.write("hy2_port=443/udp\n")
+  f.write("grpc_port=8443\n")
+  f.write(f"grpc_service={svc_grpc}\n")
+  f.write("xhttp_port=4443\n")
+PY
 
   log_ok "JSON: ${JSON_OUT}"
   log_ok "Client hints: ${OUT_DIR}/reality-client-hints.txt"
@@ -581,15 +513,13 @@ verify() {
   log_info "Проверки..."
   ss -tulpn 2>/dev/null | grep -E ':443|:8443|:4443|:2222' || true
 
-  if curl -skI --connect-timeout 8 --max-time 12 "https://${DOMAIN}/" 2>/dev/null | head -1 | grep -q '200\|HTTP'; then
+  if curl -skI --connect-timeout 8 --max-time 12 "https://${DOMAIN}/" 2>/dev/null | head -1 | grep -qE '200|HTTP'; then
     local srv
     srv=$(curl -skI --connect-timeout 8 --max-time 12 "https://${DOMAIN}/" 2>/dev/null | grep -i '^server:' | head -1 || true)
     log_ok "SelfSteal https://${DOMAIN}/ отвечает (${srv//$'\r'/})"
   else
     log_warn "SelfSteal HTTPS пока не 200 — после Save профиля в панели проверь снова"
   fi
-
-  # не рестартуем remnanode автоматически — конфиг применяется панелью
 }
 
 finalize() {
@@ -611,15 +541,15 @@ finalize() {
   echo -e "${YELLOW}Важно:${NC} клиентам SNI/Address = ${DOMAIN} (не чужой сайт)"
   echo " Public key для клиентов: ${PUBLIC_KEY}"
   echo "═══════════════════════════════════════════════════════════"
-  echo ""
-  echo "Показать JSON? [y/N]"
-  if [[ "$AUTO_YES" == "true" ]]; then
-    echo "(auto) skip print — файл уже сохранён"
-  else
+  if [[ "$AUTO_YES" != "true" ]]; then
+    echo ""
+    echo "Показать JSON? [y/N]"
     read -r show || true
     if [[ "${show:-}" =~ ^[Yy]$ ]]; then
       cat "$JSON_OUT"
     fi
+  else
+    echo "(auto) JSON сохранён в файл"
   fi
 }
 
@@ -635,6 +565,10 @@ main() {
   sync_hy2_certs
   setup_cron
   gen_reality_keys
+
+  export DOMAIN PREFIX PRIVATE_KEY PUBLIC_KEY SHORT_ID
+  export SELECTED="${SELECTED[*]}"
+  need_cmd python3
   build_json
   verify
   finalize

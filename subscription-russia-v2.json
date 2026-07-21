@@ -1,0 +1,428 @@
+{
+  "dns": {
+    "tag": "dns-inbound",
+    "servers": [
+      {
+        "address": "https://77.88.8.8/dns-query",
+        "domains": [
+          "geosite:category-ru",
+          "geosite:yandex",
+          "geosite:vk",
+          "regexp:.*\\.ru$",
+          "regexp:.*\\.xn--p1ai$"
+        ],
+        "skipFallback": true
+      },
+      {
+        "address": "https://1.1.1.1/dns-query",
+        "domains": [
+          "domain:gemini.google.com",
+          "domain:googleapis.com",
+          "domain:gstatic.com",
+          "domain:googleusercontent.com",
+          "domain:accounts.google.com",
+          "domain:google.com",
+          "domain:chatgpt.com",
+          "domain:openai.com",
+          "domain:oaistatic.com",
+          "domain:claude.ai",
+          "domain:anthropic.com"
+        ]
+      },
+      "https://1.1.1.1/dns-query",
+      "https://8.8.8.8/dns-query",
+      "localhost"
+    ],
+    "disableCache": false,
+    "queryStrategy": "UseIPv4"
+  },
+  "log": {
+    "loglevel": "warning"
+  },
+  "stats": {},
+  "policy": {
+    "levels": {
+      "0": {
+        "connIdle": 300,
+        "handshake": 12,
+        "uplinkOnly": 2,
+        "downlinkOnly": 5,
+        "bufferSize": 512
+      },
+      "8": {
+        "connIdle": 300,
+        "handshake": 12,
+        "uplinkOnly": 2,
+        "downlinkOnly": 2,
+        "bufferSize": 512
+      }
+    },
+    "system": {
+      "statsOutboundUplink": true,
+      "statsOutboundDownlink": true
+    }
+  },
+  "routing": {
+    "domainMatcher": "hybrid",
+    "domainStrategy": "IPIfNonMatch",
+    "rules": [
+      {
+        "type": "field",
+        "protocol": ["bittorrent"],
+        "outboundTag": "block"
+      },
+      {
+        "type": "field",
+        "ip": [
+          "geoip:private",
+          "10.0.0.0/8",
+          "172.16.0.0/12",
+          "192.168.0.0/16",
+          "127.0.0.0/8",
+          "100.64.0.0/10",
+          "169.254.0.0/16",
+          "fc00::/7",
+          "fe80::/10"
+        ],
+        "outboundTag": "direct"
+      },
+      {
+        "type": "field",
+        "ip": ["77.88.8.8", "77.88.8.1", "77.88.8.7", "77.88.8.3"],
+        "outboundTag": "direct"
+      },
+      {
+        "type": "field",
+        "domain": ["full:cp.cloudflare.com", "domain:connectivitycheck.gstatic.com"],
+        "outboundTag": "direct"
+      },
+      {
+        "type": "field",
+        "domain": [
+          "geosite:category-ru",
+          "geosite:yandex",
+          "geosite:vk",
+          "regexp:.*\\.ru$",
+          "regexp:.*\\.xn--p1ai$",
+          "domain:vk.com",
+          "domain:vk.ru",
+          "domain:userapi.com",
+          "domain:vk-cdn.net",
+          "domain:vkuservideo.net",
+          "domain:mycdn.me",
+          "domain:mailru.com",
+          "domain:yandex.net",
+          "domain:yandex.com",
+          "domain:yastatic.net",
+          "domain:ozonusercontent.com",
+          "domain:avito.st",
+          "domain:max.ru",
+          "domain:tbank.ru",
+          "domain:cdn-tinkoff.ru",
+          "domain:wildberries.ru",
+          "domain:wb.ru"
+        ],
+        "outboundTag": "direct"
+      },
+      {
+        "type": "field",
+        "port": "443",
+        "network": "udp",
+        "domain": [
+          "domain:youtube.com",
+          "domain:googlevideo.com",
+          "domain:youtu.be",
+          "domain:ytimg.com",
+          "domain:ggpht.com",
+          "domain:youtubei.googleapis.com"
+        ],
+        "outboundTag": "block"
+      },
+      {
+        "type": "field",
+        "domain": [
+          "domain:youtube.com",
+          "domain:googlevideo.com",
+          "domain:youtu.be",
+          "domain:ytimg.com",
+          "domain:ggpht.com",
+          "domain:youtubei.googleapis.com",
+          "domain:yt.be",
+          "domain:googleapis.com"
+        ],
+        "balancerTag": "YT-BALANCER"
+      },
+      {
+        "type": "field",
+        "inboundTag": ["YT-REROUTE"],
+        "balancerTag": "YT-FALLBACK-BALANCER"
+      },
+      {
+        "type": "field",
+        "inboundTag": ["EU-REROUTE"],
+        "balancerTag": "RU-FALLBACK-BALANCER"
+      },
+      {
+        "type": "field",
+        "network": "tcp,udp",
+        "domain": [
+          "domain:gemini.google.com",
+          "domain:bard.google.com",
+          "domain:aistudio.google.com",
+          "domain:ai.google.dev",
+          "domain:notebooklm.google.com",
+          "domain:makersuite.google.com",
+          "domain:generativelanguage.googleapis.com",
+          "domain:alkalimakersuite-pa.clients6.google.com",
+          "domain:clients6.google.com",
+          "domain:googleapis.com",
+          "domain:gstatic.com",
+          "domain:googleusercontent.com",
+          "domain:accounts.google.com",
+          "domain:myaccount.google.com",
+          "domain:ogs.google.com",
+          "domain:chatgpt.com",
+          "domain:openai.com",
+          "domain:api.openai.com",
+          "domain:auth.openai.com",
+          "domain:oaistatic.com",
+          "domain:cdn.oaistatic.com",
+          "domain:oaiusercontent.com",
+          "domain:claude.ai",
+          "domain:anthropic.com",
+          "domain:api.anthropic.com",
+          "domain:copilot.microsoft.com",
+          "domain:edgeservices.bing.com"
+        ],
+        "balancerTag": "AI-BALANCER"
+      },
+      {
+        "type": "field",
+        "network": "tcp,udp",
+        "balancerTag": "EU-BALANCER"
+      }
+    ],
+    "balancers": [
+      {
+        "tag": "YT-BALANCER",
+        "selector": ["ru"],
+        "fallbackTag": "LOOP-YT",
+        "strategy": {
+          "type": "leastLoad",
+          "settings": {
+            "maxRTT": "1500ms",
+            "expected": 2,
+            "baselines": ["800ms"],
+            "tolerance": 0.15
+          }
+        }
+      },
+      {
+        "tag": "YT-FALLBACK-BALANCER",
+        "selector": ["eu"],
+        "fallbackTag": "LOOP-EU",
+        "strategy": {
+          "type": "leastLoad",
+          "settings": {
+            "maxRTT": "2s",
+            "expected": 2,
+            "baselines": ["1s"],
+            "tolerance": 0.15
+          }
+        }
+      },
+      {
+        "tag": "AI-BALANCER",
+        "selector": ["ai"],
+        "fallbackTag": "eu",
+        "strategy": {
+          "type": "leastPing"
+        }
+      },
+      {
+        "tag": "EU-BALANCER",
+        "selector": ["eu"],
+        "fallbackTag": "LOOP-EU",
+        "strategy": {
+          "type": "leastLoad",
+          "settings": {
+            "maxRTT": "1s",
+            "expected": 2,
+            "baselines": ["1s"],
+            "tolerance": 0.1
+          }
+        }
+      },
+      {
+        "tag": "RU-FALLBACK-BALANCER",
+        "selector": ["ru"],
+        "fallbackTag": "direct",
+        "strategy": {
+          "type": "leastLoad",
+          "settings": {
+            "maxRTT": "3s",
+            "expected": 1,
+            "baselines": ["2s"],
+            "tolerance": 0.3
+          }
+        }
+      }
+    ]
+  },
+  "inbounds": [
+    {
+      "tag": "socks",
+      "port": 10808,
+      "listen": "127.0.0.1",
+      "protocol": "socks",
+      "settings": { "udp": true, "auth": "noauth" },
+      "sniffing": {
+        "enabled": true,
+        "routeOnly": false,
+        "destOverride": ["http", "tls", "quic"],
+        "domainsExcluded": ["courier.push.apple.com", "Mijia Cloud"]
+      }
+    },
+    {
+      "tag": "http",
+      "port": 10809,
+      "listen": "127.0.0.1",
+      "protocol": "http",
+      "settings": { "allowTransparent": false },
+      "sniffing": {
+        "enabled": true,
+        "routeOnly": false,
+        "destOverride": ["http", "tls", "quic"]
+      }
+    },
+    {
+      "tag": "EU-REROUTE",
+      "port": 10900,
+      "listen": "127.0.0.1",
+      "protocol": "socks",
+      "settings": { "udp": true, "auth": "noauth" },
+      "sniffing": {
+        "enabled": true,
+        "routeOnly": false,
+        "destOverride": ["http", "tls", "quic"]
+      }
+    },
+    {
+      "tag": "YT-REROUTE",
+      "port": 10901,
+      "listen": "127.0.0.1",
+      "protocol": "socks",
+      "settings": { "udp": true, "auth": "noauth" },
+      "sniffing": {
+        "enabled": true,
+        "routeOnly": false,
+        "destOverride": ["http", "tls", "quic"]
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "direct",
+      "protocol": "freedom",
+      "settings": { "domainStrategy": "UseIPv4" },
+      "streamSettings": {
+        "sockopt": {
+          "tcpNoDelay": true,
+          "tcpFastOpen": true,
+          "tcpKeepAliveIdle": 100
+        }
+      }
+    },
+    {
+      "tag": "fragment",
+      "protocol": "freedom",
+      "settings": {
+        "fragment": {
+          "length": "100-200",
+          "packets": "tlshello",
+          "interval": "10-20"
+        },
+        "domainStrategy": "UseIPv4"
+      },
+      "streamSettings": {
+        "sockopt": {
+          "tcpNoDelay": true,
+          "tcpKeepAliveIdle": 100
+        }
+      }
+    },
+    {
+      "tag": "block",
+      "protocol": "blackhole"
+    },
+    {
+      "tag": "LOOP-EU",
+      "protocol": "loopback",
+      "settings": { "inboundTag": "EU-REROUTE" }
+    },
+    {
+      "tag": "LOOP-YT",
+      "protocol": "loopback",
+      "settings": { "inboundTag": "YT-REROUTE" }
+    }
+  ],
+  "remnawave": {
+    "injectHosts": [
+      {
+        "tagPrefix": "ru",
+        "selectFrom": "NOT_HIDDEN",
+        "selector": {
+          "type": "uuids",
+          "values": [
+            "02b437b7-1905-45b3-beef-bc82e47bfb76",
+            "2e8b3924-8b16-4a44-9311-9092daaf3049",
+            "affc056e-da7e-4b24-b281-1e9e784bf180",
+            "4c0f81a4-7e02-498a-9e09-8e1c37cea36c"
+          ]
+        }
+      },
+      {
+        "tagPrefix": "eu",
+        "selectFrom": "NOT_HIDDEN",
+        "selector": {
+          "type": "uuids",
+          "values": [
+            "7888c417-94ed-4d31-a8ac-3aba88b757e2",
+            "9879624f-d6c4-4442-ab02-aa61dda3cdb5",
+            "6ba7ca4a-48f3-43de-85d0-1b410a7a52f3",
+            "6ef1fbef-b043-413f-8213-0cb95c8eba0f",
+            "7db85e80-e012-4b4c-8d7b-c1501b8401c0",
+            "3e93a04c-8c7e-43a3-b3cf-d27f8612b5ca",
+            "b0f09484-ee98-4983-9aa7-f9077bbee4c3",
+            "2cddb5bb-11aa-462f-a622-5ddb5a51e76b"
+          ]
+        }
+      },
+      {
+        "tagPrefix": "ai",
+        "selectFrom": "NOT_HIDDEN",
+        "selector": {
+          "type": "uuids",
+          "values": [
+            "7888c417-94ed-4d31-a8ac-3aba88b757e2",
+            "7db85e80-e012-4b4c-8d7b-c1501b8401c0",
+            "6ba7ca4a-48f3-43de-85d0-1b410a7a52f3",
+            "b0f09484-ee98-4983-9aa7-f9077bbee4c3",
+            "9879624f-d6c4-4442-ab02-aa61dda3cdb5",
+            "3e93a04c-8c7e-43a3-b3cf-d27f8612b5ca"
+          ]
+        }
+      }
+    ]
+  },
+  "burstObservatory": {
+    "subjectSelector": ["ru", "eu", "ai"],
+    "pingConfig": {
+      "destination": "http://www.gstatic.com/generate_204",
+      "connectivity": "",
+      "interval": "30s",
+      "timeout": "2s",
+      "sampling": 2
+    }
+  }
+}

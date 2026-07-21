@@ -171,42 +171,16 @@ proxy-groups:
     proxies:
       # LEAVE THIS LINE!
 
-  # AI: только PL (+ GER как запас в url-test через fallback-группу), БЕЗ 🇷🇺 и БЕЗ HY2
+  # AI: только Польша (стабильный exit). GER часто мёртв/флагится — не мешаем Gemini.
   - name: 🤖 AI
-    type: fallback
-    url: https://www.gstatic.com/generate_204
-    interval: 60
-    lazy: true
-    remnawave:
-      include-proxies: false
-    proxies:
-      - 🤖 AI Poland
-      - 🤖 AI Germany
-      # LEAVE THIS LINE!
-
-  - name: 🤖 AI Poland
     type: url-test
     url: https://www.gstatic.com/generate_204
-    interval: 60
+    interval: 45
     tolerance: 50
-    lazy: true
+    lazy: false
     include-all: true
     filter: "🇵🇱"
-    exclude-filter: "(?i)HY2|Hysteria"
-    remnawave:
-      include-proxies: false
-    proxies:
-      # LEAVE THIS LINE!
-
-  - name: 🤖 AI Germany
-    type: url-test
-    url: https://www.gstatic.com/generate_204
-    interval: 90
-    tolerance: 80
-    lazy: true
-    include-all: true
-    filter: "🇩🇪"
-    exclude-filter: "(?i)HY2|Hysteria"
+    exclude-filter: "(?i)HY2|Hysteria|🇷🇺"
     remnawave:
       include-proxies: false
     proxies:
@@ -339,18 +313,25 @@ rules:
   - DOMAIN-SUFFIX,claude.ai,🤖 AI
   - DOMAIN-SUFFIX,anthropic.com,🤖 AI
 
-  # Gemini / Google AI
+  # Gemini / Google AI — строго до общего google.com; никогда 🇷🇺
   - DOMAIN-SUFFIX,gemini.google.com,🤖 AI
   - DOMAIN-SUFFIX,bard.google.com,🤖 AI
   - DOMAIN-SUFFIX,aistudio.google.com,🤖 AI
   - DOMAIN-SUFFIX,ai.google.dev,🤖 AI
   - DOMAIN-SUFFIX,notebooklm.google.com,🤖 AI
   - DOMAIN-SUFFIX,makersuite.google.com,🤖 AI
+  - DOMAIN-SUFFIX,deepmind.google,🤖 AI
+  - DOMAIN-SUFFIX,withgoogle.com,🤖 AI
+  - DOMAIN-KEYWORD,generativelanguage,🤖 AI
   - DOMAIN,generativelanguage.googleapis.com,🤖 AI
+  - DOMAIN,alkalimakersuite-pa.clients6.google.com,🤖 AI
+  - DOMAIN-SUFFIX,clients6.google.com,🤖 AI
   - DOMAIN-SUFFIX,googleapis.com,🤖 AI
   - DOMAIN-SUFFIX,gstatic.com,🤖 AI
   - DOMAIN-SUFFIX,googleusercontent.com,🤖 AI
   - DOMAIN-SUFFIX,accounts.google.com,🤖 AI
+  - DOMAIN-SUFFIX,myaccount.google.com,🤖 AI
+  - DOMAIN-SUFFIX,ogs.google.com,🤖 AI
   - DOMAIN-SUFFIX,google.com,🤖 AI
 
   # Copilot

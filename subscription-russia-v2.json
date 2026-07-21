@@ -230,6 +230,8 @@
           "domain:ai.google.dev",
           "domain:notebooklm.google.com",
           "domain:makersuite.google.com",
+          "domain:deepmind.google",
+          "domain:withgoogle.com",
           "domain:generativelanguage.googleapis.com",
           "domain:alkalimakersuite-pa.clients6.google.com",
           "domain:clients6.google.com",
@@ -490,10 +492,7 @@
           "values": [
             "7888c417-94ed-4d31-a8ac-3aba88b757e2",
             "6ba7ca4a-48f3-43de-85d0-1b410a7a52f3",
-            "9879624f-d6c4-4442-ab02-aa61dda3cdb5",
-            "7db85e80-e012-4b4c-8d7b-c1501b8401c0",
-            "b0f09484-ee98-4983-9aa7-f9077bbee4c3",
-            "3e93a04c-8c7e-43a3-b3cf-d27f8612b5ca"
+            "9879624f-d6c4-4442-ab02-aa61dda3cdb5"
           ]
         }
       },

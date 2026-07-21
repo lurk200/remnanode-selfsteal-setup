@@ -257,6 +257,7 @@ rules:
   - IP-CIDR,127.0.0.0/8,DIRECT,no-resolve
   - IP-CIDR,100.64.0.0/10,DIRECT,no-resolve
 
+  # --- DIRECT: банки / госуслуги / антидетект VPN (не светить exit IP) ---
   - GEOSITE,category-ru,DIRECT
   - GEOSITE,yandex,DIRECT
   - GEOSITE,vk,DIRECT
@@ -270,10 +271,46 @@ rules:
   - DOMAIN-SUFFIX,yastatic.net,DIRECT
   - DOMAIN-SUFFIX,max.ru,DIRECT
   - DOMAIN-SUFFIX,tbank.ru,DIRECT
+  - DOMAIN-SUFFIX,cdn-tinkoff.ru,DIRECT
+  - DOMAIN-SUFFIX,sberbank.ru,DIRECT
+  - DOMAIN-SUFFIX,sber.ru,DIRECT
+  - DOMAIN-SUFFIX,online.sberbank.ru,DIRECT
+  - DOMAIN-SUFFIX,vtb.ru,DIRECT
+  - DOMAIN-SUFFIX,alfabank.ru,DIRECT
+  - DOMAIN-SUFFIX,gazprombank.ru,DIRECT
+  - DOMAIN-SUFFIX,gosuslugi.ru,DIRECT
+  - DOMAIN-SUFFIX,gu-st.ru,DIRECT
+  - DOMAIN-SUFFIX,esia.gosuslugi.ru,DIRECT
+  - DOMAIN-SUFFIX,nalog.gov.ru,DIRECT
+  - DOMAIN-SUFFIX,mos.ru,DIRECT
+  - DOMAIN-SUFFIX,cbr.ru,DIRECT
   - DOMAIN-SUFFIX,wb.ru,DIRECT
   - DOMAIN-SUFFIX,wildberries.ru,DIRECT
   - DOMAIN-SUFFIX,avito.st,DIRECT
   - DOMAIN-SUFFIX,ozonusercontent.com,DIRECT
+
+  # IP-check / «детектор VPN» — иначе банки/РКН видят EU exit и банят ноду
+  - DOMAIN-SUFFIX,2ip.ru,DIRECT
+  - DOMAIN-SUFFIX,2ip.io,DIRECT
+  - DOMAIN-SUFFIX,ifconfig.me,DIRECT
+  - DOMAIN-SUFFIX,ifconfig.co,DIRECT
+  - DOMAIN-SUFFIX,ipify.org,DIRECT
+  - DOMAIN-SUFFIX,api.ipify.org,DIRECT
+  - DOMAIN-SUFFIX,icanhazip.com,DIRECT
+  - DOMAIN-SUFFIX,ipinfo.io,DIRECT
+  - DOMAIN-SUFFIX,ip.sb,DIRECT
+  - DOMAIN-SUFFIX,whatismyipaddress.com,DIRECT
+  - DOMAIN-SUFFIX,whoer.net,DIRECT
+  - DOMAIN-SUFFIX,browserleaks.com,DIRECT
+  - DOMAIN-SUFFIX,ipleak.net,DIRECT
+  - DOMAIN-SUFFIX,dnsleaktest.com,DIRECT
+  - DOMAIN-SUFFIX,yandex.ru/internet,DIRECT
+
+  # Не ходить на SelfSteal-домены через прокси (снижает «скан» и утечки)
+  - DOMAIN,yt.lurk-vpn.online,DIRECT
+  - DOMAIN,pl.lurk-vpn.online,DIRECT
+  - DOMAIN,plnew.lurk-vpn.online,DIRECT
+  - DOMAIN,ger.lurk-vpn.online,DIRECT
 
   # YouTube (до AI — youtubei.googleapis не уйдёт в AI)
   - DOMAIN-SUFFIX,youtube.com,▶️ YouTube

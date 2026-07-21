@@ -1,4 +1,4 @@
-﻿# Remnawave SelfSteal Multi-Protocol Setup v1.3
+# Remnawave SelfSteal Multi-Protocol Setup v1.3
 
 Авто-настройка Remnawave Node + SelfSteal + **RU whitelist SNI probe** + проверка WL IP.
 
@@ -58,8 +58,9 @@ bash <(curl -fsSL ".../setup.sh") --yes --all --ru-whitelist-source "https://cdn
 |------|----------------|
 | [`subscription-russia-v2.json`](subscription-russia-v2.json) | XRAY_JSON |
 | [`subscription-russia-mihomo.yaml`](subscription-russia-mihomo.yaml) | MIHOMO |
+| [`subscription-russia-clash.yaml`](subscription-russia-clash.yaml) | CLASH |
 
-Оба: AI → PL (не RU), YouTube → RU→EU, `.ru` → DIRECT. Mihomo ещё: группа `🔗 RU Bridge (LTE)`.
+Все: AI → DE/PL (не RU), YouTube → RU→EU, `.ru`/банки/2ip → DIRECT. Mihomo/Clash: `🔗 RU Bridge (LTE)`.
 
 ## License
 

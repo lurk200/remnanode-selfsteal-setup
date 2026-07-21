@@ -1,13 +1,13 @@
 #!/bin/bash
 #
-# Remnawave SelfSteal Multi-Protocol Setup v1.3.1
+# Remnawave SelfSteal Multi-Protocol Setup v1.3.2
 # SelfSteal + RU whitelist SNI probe + WL IP check + CDN template
 #
 # bash <(curl -fsSL https://cdn.jsdelivr.net/gh/lurk200/remnanode-selfsteal-setup@main/setup.sh) --yes --all
 #
 set -euo pipefail
 
-VERSION="1.3.1-selfsteal"
+VERSION="1.3.2-selfsteal"
 OUT_DIR="/opt/remnanode"
 JSON_OUT="${OUT_DIR}/config-profile-selfsteal.json"
 HINTS_OUT="${OUT_DIR}/reality-client-hints.txt"
@@ -559,27 +559,84 @@ open_port() {
 
 sync_hy2_certs() {
   log_info "HY2 certs → /dev/shm (файлы, не symlink)..."
-  [[ -L /dev/shm/hysteria_cert.pem ]] && rm -f /dev/shm/hysteria_cert.pem
-  [[ -L /dev/shm/hysteria_key.pem ]] && rm -f /dev/shm/hysteria_key.pem
-  cp -L "$CERT_PATH" /dev/shm/hysteria_cert.pem
-  cp -L "$KEY_PATH"  /dev/shm/hysteria_key.pem
-  chmod 644 /dev/shm/hysteria_cert.pem
-  chmod 600 /dev/shm/hysteria_key.pem
+  [[ -f "$CERT_PATH" && -f "$KEY_PATH" ]] || fatal "Нет исходных cert/key: $CERT_PATH / $KEY_PATH"
+  [[ -s "$CERT_PATH" ]] || fatal "Пустой сертификат: $CERT_PATH"
+  openssl x509 -in "$CERT_PATH" -noout -subject &>/dev/null || fatal "Host openssl не читает $CERT_PATH"
+
+  # куда реально смонтирован /dev/shm у remnanode (иногда не host /dev/shm)
+  local shm_src
+  shm_src=$(docker inspect remnanode --format '{{range .Mounts}}{{if eq .Destination "/dev/shm"}}{{.Source}}{{end}}{{end}}' 2>/dev/null || true)
+  if [[ -z "$shm_src" ]]; then
+    shm_src="/dev/shm"
+    log_warn "Mount /dev/shm у remnanode не найден в inspect — пишу в /dev/shm хоста"
+  else
+    log_info "remnanode /dev/shm ← host:${shm_src}"
+  fi
+  mkdir -p "$shm_src"
+
+  # убрать битые symlink
+  [[ -L "${shm_src}/hysteria_cert.pem" || -e "${shm_src}/hysteria_cert.pem" ]] && rm -f "${shm_src}/hysteria_cert.pem"
+  [[ -L "${shm_src}/hysteria_key.pem" || -e "${shm_src}/hysteria_key.pem" ]] && rm -f "${shm_src}/hysteria_key.pem"
+
+  # копия РЕАЛЬНЫХ файлов (не symlink LE → archive)
+  cp -L --remove-destination "$CERT_PATH" "${shm_src}/hysteria_cert.pem"
+  cp -L --remove-destination "$KEY_PATH"  "${shm_src}/hysteria_key.pem"
+  chmod 644 "${shm_src}/hysteria_cert.pem"
+  chmod 600 "${shm_src}/hysteria_key.pem"
+
+  # зеркало на классический /dev/shm (если mount другой)
+  if [[ "$shm_src" != "/dev/shm" ]]; then
+    cp -f "${shm_src}/hysteria_cert.pem" /dev/shm/hysteria_cert.pem 2>/dev/null || true
+    cp -f "${shm_src}/hysteria_key.pem"  /dev/shm/hysteria_key.pem 2>/dev/null || true
+    chmod 644 /dev/shm/hysteria_cert.pem 2>/dev/null || true
+    chmod 600 /dev/shm/hysteria_key.pem 2>/dev/null || true
+  fi
+
   mkdir -p "$CERT_PERSIST"
-  cp -f /dev/shm/hysteria_*.pem "$CERT_PERSIST/"
+  cp -f "${shm_src}/hysteria_cert.pem" "$CERT_PERSIST/hysteria_cert.pem"
+  cp -f "${shm_src}/hysteria_key.pem"  "$CERT_PERSIST/hysteria_key.pem"
   chmod 600 "$CERT_PERSIST/hysteria_key.pem"
 
   if [[ "$CERT_PATH" != "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" ]]; then
     mkdir -p "/etc/letsencrypt/live/${DOMAIN}"
-    ln -sfn "$CERT_PATH" "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
-    ln -sfn "$KEY_PATH"  "/etc/letsencrypt/live/${DOMAIN}/privkey.pem"
-    ln -sfn "$CERT_PATH" "/etc/letsencrypt/live/${DOMAIN}/cert.pem"
-    ln -sfn "$CERT_PATH" "/etc/letsencrypt/live/${DOMAIN}/chain.pem"
+    # не ln на самого себя
+    if [[ "$(readlink -f "$CERT_PATH" 2>/dev/null || echo "$CERT_PATH")" != "$(readlink -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" 2>/dev/null || true)" ]]; then
+      ln -sfn "$CERT_PATH" "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
+      ln -sfn "$KEY_PATH"  "/etc/letsencrypt/live/${DOMAIN}/privkey.pem"
+      ln -sfn "$CERT_PATH" "/etc/letsencrypt/live/${DOMAIN}/cert.pem"
+      ln -sfn "$CERT_PATH" "/etc/letsencrypt/live/${DOMAIN}/chain.pem"
+    fi
   fi
 
-  docker exec remnanode openssl x509 -in /dev/shm/hysteria_cert.pem -noout -subject &>/dev/null \
-    || fatal "Контейнер не читает hysteria_cert.pem"
-  log_ok "HY2 certs OK"
+  # проверка внутри контейнера (openssl может отсутствовать — fallback на python/cat)
+  local err=""
+  set +e
+  err=$(docker exec remnanode sh -c 'openssl x509 -in /dev/shm/hysteria_cert.pem -noout -subject 2>&1' 2>&1)
+  local rc=$?
+  set -e
+  if [[ $rc -ne 0 ]]; then
+    # нет openssl в образе? проверить файл и валидность через host + docker exec cat
+    if ! docker exec remnanode test -f /dev/shm/hysteria_cert.pem 2>/dev/null; then
+      log_warn "Файла нет в контейнере — docker cp fallback..."
+      docker cp "${shm_src}/hysteria_cert.pem" remnanode:/dev/shm/hysteria_cert.pem
+      docker cp "${shm_src}/hysteria_key.pem"  remnanode:/dev/shm/hysteria_key.pem
+      docker exec remnanode chmod 644 /dev/shm/hysteria_cert.pem
+      docker exec remnanode chmod 600 /dev/shm/hysteria_key.pem
+      set +e
+      err=$(docker exec remnanode sh -c 'openssl x509 -in /dev/shm/hysteria_cert.pem -noout -subject 2>&1' 2>&1)
+      rc=$?
+      set -e
+    fi
+  fi
+  if [[ $rc -ne 0 ]]; then
+    # openssl отсутствует — достаточно что файл непустой и PEM
+    if docker exec remnanode sh -c 'test -s /dev/shm/hysteria_cert.pem && head -1 /dev/shm/hysteria_cert.pem | grep -q BEGIN' 2>/dev/null; then
+      log_warn "openssl в remnanode не прочитал cert (${err:-no openssl}) — PEM файл есть, продолжаем"
+    else
+      fatal "Контейнер не читает hysteria_cert.pem" "host: ls -la ${shm_src}/hysteria_*; err=${err}"
+    fi
+  fi
+  log_ok "HY2 certs OK (${shm_src})"
 }
 
 setup_cron() {

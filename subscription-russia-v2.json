@@ -298,7 +298,7 @@
       },
       {
         "tag": "AI-BALANCER",
-        "selector": ["ai"],
+        "selector": ["ai-de"],
         "fallbackTag": "LOOP-AI",
         "strategy": {
           "type": "leastPing"
@@ -306,8 +306,8 @@
       },
       {
         "tag": "AI-FALLBACK-BALANCER",
-        "selector": ["pl"],
-        "fallbackTag": "pl",
+        "selector": ["ai-pl"],
+        "fallbackTag": "ai-pl",
         "strategy": {
           "type": "leastPing"
         }
@@ -490,6 +490,33 @@
         "selector": {
           "type": "uuids",
           "values": [
+            "7db85e80-e012-4b4c-8d7b-c1501b8401c0",
+            "b0f09484-ee98-4983-9aa7-f9077bbee4c3",
+            "3e93a04c-8c7e-43a3-b3cf-d27f8612b5ca",
+            "7888c417-94ed-4d31-a8ac-3aba88b757e2",
+            "6ba7ca4a-48f3-43de-85d0-1b410a7a52f3",
+            "9879624f-d6c4-4442-ab02-aa61dda3cdb5"
+          ]
+        }
+      },
+      {
+        "tagPrefix": "ai-de",
+        "selectFrom": "NOT_HIDDEN",
+        "selector": {
+          "type": "uuids",
+          "values": [
+            "7db85e80-e012-4b4c-8d7b-c1501b8401c0",
+            "b0f09484-ee98-4983-9aa7-f9077bbee4c3",
+            "3e93a04c-8c7e-43a3-b3cf-d27f8612b5ca"
+          ]
+        }
+      },
+      {
+        "tagPrefix": "ai-pl",
+        "selectFrom": "NOT_HIDDEN",
+        "selector": {
+          "type": "uuids",
+          "values": [
             "7888c417-94ed-4d31-a8ac-3aba88b757e2",
             "6ba7ca4a-48f3-43de-85d0-1b410a7a52f3",
             "9879624f-d6c4-4442-ab02-aa61dda3cdb5"
@@ -516,7 +543,7 @@
     ]
   },
   "burstObservatory": {
-    "subjectSelector": ["ru", "pl", "ai", "eu"],
+    "subjectSelector": ["ru", "pl", "ai", "ai-de", "ai-pl", "eu"],
     "pingConfig": {
       "destination": "http://www.gstatic.com/generate_204",
       "connectivity": "",

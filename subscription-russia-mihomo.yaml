@@ -171,8 +171,31 @@ proxy-groups:
     proxies:
       # LEAVE THIS LINE!
 
-  # AI: только Польша (стабильный exit). GER часто мёртв/флагится — не мешаем Gemini.
+  # AI: выбор локации (Gemini часто режет датацентр PL)
   - name: 🤖 AI
+    type: select
+    remnawave:
+      include-proxies: false
+    proxies:
+      - 🤖 AI Germany
+      - 🤖 AI Poland
+      # LEAVE THIS LINE!
+
+  - name: 🤖 AI Germany
+    type: url-test
+    url: https://www.gstatic.com/generate_204
+    interval: 45
+    tolerance: 50
+    lazy: false
+    include-all: true
+    filter: "🇩🇪"
+    exclude-filter: "(?i)HY2|Hysteria|🇷🇺"
+    remnawave:
+      include-proxies: false
+    proxies:
+      # LEAVE THIS LINE!
+
+  - name: 🤖 AI Poland
     type: url-test
     url: https://www.gstatic.com/generate_204
     interval: 45

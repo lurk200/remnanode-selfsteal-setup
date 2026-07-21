@@ -1,13 +1,13 @@
 #!/bin/bash
 #
-# Remnawave SelfSteal Multi-Protocol Setup v1.3.0
+# Remnawave SelfSteal Multi-Protocol Setup v1.3.1
 # SelfSteal + RU whitelist SNI probe + WL IP check + CDN template
 #
 # bash <(curl -fsSL https://cdn.jsdelivr.net/gh/lurk200/remnanode-selfsteal-setup@main/setup.sh) --yes --all
 #
 set -euo pipefail
 
-VERSION="1.3.0-selfsteal"
+VERSION="1.3.1-selfsteal"
 OUT_DIR="/opt/remnanode"
 JSON_OUT="${OUT_DIR}/config-profile-selfsteal.json"
 HINTS_OUT="${OUT_DIR}/reality-client-hints.txt"
@@ -495,10 +495,17 @@ detect_domain() {
 
 detect_prefix() {
   if [[ -n "$TAG_PREFIX" ]]; then PREFIX="$TAG_PREFIX"; return; fi
-  local sub; sub=$(echo "$DOMAIN" | cut -d. -f1)
+  local sub; sub=$(echo "$DOMAIN" | cut -d. -f1 | tr '[:upper:]' '[:lower:]')
+  # первый лейбл домена = префикс тегов (plnew, ger, yt…); www/mail/api → www
   case "$sub" in
-    ger|pl|yt|ru|de|nl|fi|www) PREFIX="$sub" ;;
-    *) PREFIX="www" ;;
+    ""|www|mail|api|cdn|panel|node) PREFIX="www" ;;
+    *)
+      if [[ "$sub" =~ ^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$ ]]; then
+        PREFIX="$sub"
+      else
+        PREFIX="www"
+      fi
+      ;;
   esac
 }
 

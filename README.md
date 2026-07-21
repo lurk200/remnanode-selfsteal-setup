@@ -52,6 +52,15 @@ bash <(curl -fsSL ".../setup.sh") --yes --all --ru-whitelist-source "https://cdn
 2. RU bridge → EU egress ([xray-double-hop](https://github.com/petrochen/xray-double-hop))
 3. CDN Cloudflare (`--cdn-domain`)
 
+## Подписка Россия (шаблоны)
+
+| Файл | Тип в панели |
+|------|----------------|
+| [`subscription-russia-v2.json`](subscription-russia-v2.json) | XRAY_JSON |
+| [`subscription-russia-mihomo.yaml`](subscription-russia-mihomo.yaml) | MIHOMO |
+
+Оба: AI → PL (не RU), YouTube → RU→EU, `.ru` → DIRECT. Mihomo ещё: группа `🔗 RU Bridge (LTE)`.
+
 ## License
 
 MIT

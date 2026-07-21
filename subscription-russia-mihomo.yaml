@@ -1,0 +1,326 @@
+# Remnawave Mihomo template — Russia v2 (зеркало XRAY_JSON)
+# AI → только PL/GER (НЕ через 🇷🇺)
+# YouTube → 🇷🇺 → EU
+# .ru / geosite RU → DIRECT
+#
+# Панель: Subscription Templates → MIHOMO → вставь этот YAML
+# Hosts remarks должны содержать флаги: 🇷🇺 / 🇵🇱 / 🇩🇪
+
+mixed-port: 7890
+allow-lan: false
+bind-address: "*"
+mode: rule
+log-level: warning
+ipv6: false
+find-process-mode: strict
+unified-delay: true
+tcp-concurrent: true
+global-client-fingerprint: chrome
+
+profile:
+  store-selected: true
+  store-fake-ip: true
+
+sniffer:
+  enable: true
+  force-dns-mapping: true
+  parse-pure-ip: true
+  override-destination: false
+  sniff:
+    HTTP:
+      ports: [80, 8080-8880]
+    TLS:
+      ports: [443, 8443]
+    QUIC:
+      ports: [443]
+
+tun:
+  enable: true
+  stack: mixed
+  dns-hijack:
+    - any:53
+    - tcp://any:53
+  auto-route: true
+  auto-redirect: true
+  auto-detect-interface: true
+  strict-route: true
+
+dns:
+  enable: true
+  listen: 0.0.0.0:1053
+  ipv6: false
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  fake-ip-filter:
+    - "*.lan"
+    - "*.local"
+    - "dns.msftncsi.com"
+    - "www.msftncsi.com"
+    - "www.msftconnecttest.com"
+    - "connectivitycheck.gstatic.com"
+    - "cp.cloudflare.com"
+    - "+.push.apple.com"
+    - "time.*.com"
+    - "ntp.*.com"
+  default-nameserver:
+    - 77.88.8.8
+    - 1.1.1.1
+  nameserver:
+    - https://1.1.1.1/dns-query
+    - https://8.8.8.8/dns-query
+  nameserver-policy:
+    "geosite:category-ru":
+      - https://77.88.8.8/dns-query
+      - https://dns.yandex.ru/dns-query
+    "+.ru":
+      - https://77.88.8.8/dns-query
+    "geosite:yandex":
+      - https://77.88.8.8/dns-query
+    "geosite:vk":
+      - https://77.88.8.8/dns-query
+    "+.chatgpt.com":
+      - https://1.1.1.1/dns-query
+    "+.openai.com":
+      - https://1.1.1.1/dns-query
+    "+.oaistatic.com":
+      - https://1.1.1.1/dns-query
+    "+.claude.ai":
+      - https://1.1.1.1/dns-query
+    "+.anthropic.com":
+      - https://1.1.1.1/dns-query
+    "+.googleapis.com":
+      - https://1.1.1.1/dns-query
+    "+.gemini.google.com":
+      - https://1.1.1.1/dns-query
+
+# Опциональная цепочка для LTE/whitelist: EU через RU-мост
+proxy-providers:
+  ru-bridge-dialer:
+    type: inline
+    exclude-filter: "🇷🇺"
+    remnawave:
+      include-proxies: true
+    override:
+      dialer-proxy: "🇷🇺 Russia"
+      additional-prefix: "🇷🇺➡️"
+    payload:
+
+proxy-groups:
+  - name: PROXY
+    type: select
+    proxies:
+      - ⚡️ EU Fastest
+      - 🇵🇱 Poland
+      - 🇩🇪 Germany
+      - 🇷🇺 Russia
+      - 🤖 AI
+      - ▶️ YouTube
+      - 🔗 RU Bridge (LTE)
+      - DIRECT
+      # LEAVE THIS LINE!
+
+  - name: ⚡️ EU Fastest
+    type: url-test
+    url: https://cp.cloudflare.com/generate_204
+    interval: 120
+    tolerance: 100
+    lazy: true
+    include-all: true
+    exclude-filter: "🇷🇺"
+    remnawave:
+      include-proxies: false
+    proxies:
+      # LEAVE THIS LINE!
+
+  - name: 🇵🇱 Poland
+    type: url-test
+    url: https://cp.cloudflare.com/generate_204
+    interval: 90
+    tolerance: 80
+    lazy: true
+    include-all: true
+    filter: "🇵🇱"
+    remnawave:
+      include-proxies: false
+    proxies:
+      # LEAVE THIS LINE!
+
+  - name: 🇩🇪 Germany
+    type: url-test
+    url: https://cp.cloudflare.com/generate_204
+    interval: 120
+    tolerance: 100
+    lazy: true
+    include-all: true
+    filter: "🇩🇪"
+    remnawave:
+      include-proxies: false
+    proxies:
+      # LEAVE THIS LINE!
+
+  - name: 🇷🇺 Russia
+    type: url-test
+    url: https://cp.cloudflare.com/generate_204
+    interval: 120
+    tolerance: 150
+    lazy: true
+    include-all: true
+    filter: "🇷🇺"
+    remnawave:
+      include-proxies: false
+    proxies:
+      # LEAVE THIS LINE!
+
+  # AI: только PL (+ GER как запас в url-test через fallback-группу), БЕЗ 🇷🇺 и БЕЗ HY2
+  - name: 🤖 AI
+    type: fallback
+    url: https://www.gstatic.com/generate_204
+    interval: 60
+    lazy: true
+    remnawave:
+      include-proxies: false
+    proxies:
+      - 🤖 AI Poland
+      - 🤖 AI Germany
+      # LEAVE THIS LINE!
+
+  - name: 🤖 AI Poland
+    type: url-test
+    url: https://www.gstatic.com/generate_204
+    interval: 60
+    tolerance: 50
+    lazy: true
+    include-all: true
+    filter: "🇵🇱"
+    exclude-filter: "(?i)HY2|Hysteria"
+    remnawave:
+      include-proxies: false
+    proxies:
+      # LEAVE THIS LINE!
+
+  - name: 🤖 AI Germany
+    type: url-test
+    url: https://www.gstatic.com/generate_204
+    interval: 90
+    tolerance: 80
+    lazy: true
+    include-all: true
+    filter: "🇩🇪"
+    exclude-filter: "(?i)HY2|Hysteria"
+    remnawave:
+      include-proxies: false
+    proxies:
+      # LEAVE THIS LINE!
+
+  # YouTube: сначала РФ (стабильнее под ТСПУ), потом EU
+  - name: ▶️ YouTube
+    type: fallback
+    url: https://www.youtube.com/generate_204
+    interval: 120
+    lazy: true
+    remnawave:
+      include-proxies: false
+    proxies:
+      - 🇷🇺 Russia
+      - ⚡️ EU Fastest
+      # LEAVE THIS LINE!
+
+  # Для мобильного WL: выход в EU через российский вход
+  - name: 🔗 RU Bridge (LTE)
+    type: select
+    remnawave:
+      include-proxies: false
+    proxies:
+      - ⚡️ EU Fastest
+      # LEAVE THIS LINE!
+    use:
+      - ru-bridge-dialer
+
+  - name: 🔓 DIRECT
+    type: select
+    remnawave:
+      include-proxies: false
+    proxies:
+      - DIRECT
+
+rules:
+  - ACTION,REJECT,bittorrent
+
+  - DOMAIN,cp.cloudflare.com,DIRECT
+  - DOMAIN,connectivitycheck.gstatic.com,DIRECT
+  - DOMAIN,www.msftconnecttest.com,DIRECT
+
+  - GEOIP,PRIVATE,DIRECT,no-resolve
+  - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
+  - IP-CIDR,172.16.0.0/12,DIRECT,no-resolve
+  - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
+  - IP-CIDR,127.0.0.0/8,DIRECT,no-resolve
+  - IP-CIDR,100.64.0.0/10,DIRECT,no-resolve
+
+  - GEOSITE,category-ru,DIRECT
+  - GEOSITE,yandex,DIRECT
+  - GEOSITE,vk,DIRECT
+  - DOMAIN-SUFFIX,ru,DIRECT
+  - DOMAIN-SUFFIX,xn--p1ai,DIRECT
+  - DOMAIN-SUFFIX,vk.com,DIRECT
+  - DOMAIN-SUFFIX,userapi.com,DIRECT
+  - DOMAIN-SUFFIX,vk-cdn.net,DIRECT
+  - DOMAIN-SUFFIX,mycdn.me,DIRECT
+  - DOMAIN-SUFFIX,yandex.net,DIRECT
+  - DOMAIN-SUFFIX,yastatic.net,DIRECT
+  - DOMAIN-SUFFIX,max.ru,DIRECT
+  - DOMAIN-SUFFIX,tbank.ru,DIRECT
+  - DOMAIN-SUFFIX,wb.ru,DIRECT
+  - DOMAIN-SUFFIX,wildberries.ru,DIRECT
+  - DOMAIN-SUFFIX,avito.st,DIRECT
+  - DOMAIN-SUFFIX,ozonusercontent.com,DIRECT
+
+  # YouTube (до AI — youtubei.googleapis не уйдёт в AI)
+  - DOMAIN-SUFFIX,youtube.com,▶️ YouTube
+  - DOMAIN-SUFFIX,youtu.be,▶️ YouTube
+  - DOMAIN-SUFFIX,googlevideo.com,▶️ YouTube
+  - DOMAIN-SUFFIX,ytimg.com,▶️ YouTube
+  - DOMAIN-SUFFIX,ggpht.com,▶️ YouTube
+  - DOMAIN-SUFFIX,youtubekids.com,▶️ YouTube
+  - DOMAIN,youtubei.googleapis.com,▶️ YouTube
+
+  # OpenAI / ChatGPT — только AI (PL→GER), не RU
+  - DOMAIN-SUFFIX,chatgpt.com,🤖 AI
+  - DOMAIN-SUFFIX,openai.com,🤖 AI
+  - DOMAIN-SUFFIX,oaistatic.com,🤖 AI
+  - DOMAIN-SUFFIX,oaiusercontent.com,🤖 AI
+  - DOMAIN-SUFFIX,auth0.openai.com,🤖 AI
+  - DOMAIN-SUFFIX,featuregates.org,🤖 AI
+  - DOMAIN-SUFFIX,featureassets.org,🤖 AI
+  - DOMAIN-SUFFIX,statsig.com,🤖 AI
+  - DOMAIN-SUFFIX,statsigapi.net,🤖 AI
+  - DOMAIN-SUFFIX,prodregistryv2.org,🤖 AI
+  - DOMAIN,challenges.cloudflare.com,🤖 AI
+  - DOMAIN,js.stripe.com,🤖 AI
+
+  # Claude
+  - DOMAIN-SUFFIX,claude.ai,🤖 AI
+  - DOMAIN-SUFFIX,anthropic.com,🤖 AI
+
+  # Gemini / Google AI
+  - DOMAIN-SUFFIX,gemini.google.com,🤖 AI
+  - DOMAIN-SUFFIX,bard.google.com,🤖 AI
+  - DOMAIN-SUFFIX,aistudio.google.com,🤖 AI
+  - DOMAIN-SUFFIX,ai.google.dev,🤖 AI
+  - DOMAIN-SUFFIX,notebooklm.google.com,🤖 AI
+  - DOMAIN-SUFFIX,makersuite.google.com,🤖 AI
+  - DOMAIN,generativelanguage.googleapis.com,🤖 AI
+  - DOMAIN-SUFFIX,googleapis.com,🤖 AI
+  - DOMAIN-SUFFIX,gstatic.com,🤖 AI
+  - DOMAIN-SUFFIX,googleusercontent.com,🤖 AI
+  - DOMAIN-SUFFIX,accounts.google.com,🤖 AI
+  - DOMAIN-SUFFIX,google.com,🤖 AI
+
+  # Copilot
+  - DOMAIN-SUFFIX,copilot.microsoft.com,🤖 AI
+  - DOMAIN-SUFFIX,edgeservices.bing.com,🤖 AI
+  - DOMAIN-SUFFIX,sydney.bing.com,🤖 AI
+
+  - GEOIP,RU,DIRECT,no-resolve
+
+  - MATCH,PROXY
